@@ -5,12 +5,15 @@ import {
   expectedScore,
   firstKnockoutRound,
   groupStandings,
+  knockoutSeeding,
+  nextKnockoutSlot,
   planGroupStage,
   rateMatch,
   roundRobin,
   seedOrder,
   snakeGroups,
   type QueueMatch,
+  validateMatchSets,
 } from "./index";
 
 const players = (n: number) => Array.from({ length: n }, (_, i) => ({ id: `p${i + 1}`, elo: 2000 - i * 10 }));
@@ -80,6 +83,34 @@ describe("sıralama", () => {
 });
 
 describe("eleme", () => {
+  const groupsOf = (n: number) => Array.from({ length: n }, (_, g) => [0, 1, 2, 3].map((p) => `${"ABCDE"[g]}${p + 1}`));
+  const firstRoundClashes = (groups: string[][]) =>
+    firstKnockoutRound(knockoutSeeding(groups, 2)).filter(
+      (m) => m.playerAId && m.playerBId && m.playerAId[0] === m.playerBId[0],
+    );
+
+  it("2-5 grupta aynı gruptan iki oyuncu ilk turda eşleşmez", () => {
+    for (const n of [2, 3, 4, 5]) expect(firstRoundClashes(groupsOf(n))).toEqual([]);
+  });
+
+  it("kademe içinde ELO'ya göre sıralar", () => {
+    const elo = (id: string) => ({ A1: 1500, B1: 1700, C1: 1600 })[id] ?? 1000;
+    expect(knockoutSeeding(groupsOf(3), 2, elo).slice(0, 3)).toEqual(["B1", "C1", "A1"]);
+  });
+
+  it("grup birincileri üst tohumlardır ve bay alır", () => {
+    const seeded = knockoutSeeding(groupsOf(3), 2);
+    expect(seeded.slice(0, 3).sort()).toEqual(["A1", "B1", "C1"]);
+    const r = firstKnockoutRound(seeded);
+    expect(r.find((m) => m.playerAId === "A1")).toMatchObject({ bye: true });
+  });
+
+  it("kazanan bir sonraki turun doğru yuvasına gider", () => {
+    expect(nextKnockoutSlot(8, 3)).toEqual({ round: "SF", order: 1, slot: "B" });
+    expect(nextKnockoutSlot(4, 0)).toEqual({ round: "F", order: 0, slot: "A" });
+    expect(nextKnockoutSlot(2, 0)).toBeNull();
+  });
+
   it("8'lik tabloda 1 ile 8, 4 ile 5 eşleşir", () => {
     expect(seedOrder(8)).toEqual([1, 8, 4, 5, 2, 7, 3, 6]);
     const r = firstKnockoutRound(["s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8"]);
@@ -121,5 +152,26 @@ describe("masa kuyruğu", () => {
   it("kendi masası boşta olan grubun maçını başka masaya almaz", () => {
     const res = assignTables([m("1", 0, "a", "b", "T2")], ["T1", "T2"]);
     expect(res).toEqual([{ matchId: "1", tableId: "T2" }]);
+  });
+});
+
+describe("skor doğrulama", () => {
+  it("3-0, 3-1 ve 3-2 maçları kabul eder", () => {
+    expect(() => validateMatchSets([[11, 5], [11, 9], [11, 0]], 5)).not.toThrow();
+    expect(() => validateMatchSets([[11, 5], [9, 11], [11, 7], [12, 10]], 5)).not.toThrow();
+    expect(() => validateMatchSets([[5, 11], [11, 9], [9, 11], [11, 7], [15, 13]], 5)).not.toThrow();
+  });
+
+  it("11'e ulaşmayan veya 10-10 sonrası 2 fark olmayan seti reddeder", () => {
+    expect(() => validateMatchSets([[10, 8], [11, 9], [11, 0]], 5)).toThrow("1. set");
+    expect(() => validateMatchSets([[11, 5], [11, 10], [11, 0]], 5)).toThrow("2. set");
+    expect(() => validateMatchSets([[11, 5], [11, 9], [14, 10]], 5)).toThrow("3. set");
+    expect(() => validateMatchSets([[11, 5], [11, 9], [13, 9]], 5)).toThrow("3. set");
+  });
+
+  it("bitmemiş maçı ve karar sonrası seti reddeder", () => {
+    expect(() => validateMatchSets([[11, 5], [11, 9]], 5)).toThrow("bitmemiş");
+    expect(() => validateMatchSets([[11, 5], [11, 9], [11, 3], [11, 4]], 5)).toThrow("4. set girilemez");
+    expect(() => validateMatchSets([], 5)).toThrow("bitmemiş");
   });
 });

@@ -1,31 +1,18 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { Avatar, EloDelta } from "@/components/ui";
 import { currentSalon } from "@/lib/salon";
-import { PROVISIONAL_MATCHES, STARTING_ELO } from "@/lib/tournament";
+import { LEVELS, addSalonPlayer } from "@/lib/services/player";
+import { PROVISIONAL_MATCHES } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
-
-const LEVELS = [
-  { value: "BASLANGIC", label: "Başlangıç (1200)" },
-  { value: "ORTA", label: "Orta (1500)" },
-  { value: "ILERI", label: "İleri (1800)" },
-] as const;
 
 async function addPlayer(formData: FormData) {
   "use server";
   const salon = await currentSalon();
   const name = String(formData.get("name") ?? "").trim();
-  const email = String(formData.get("email") ?? "").trim().toLowerCase() || null;
-  const level = String(formData.get("level")) as keyof typeof STARTING_ELO;
   if (!name) return;
-  const player = email
-    ? await db.player.upsert({ where: { email }, update: { name }, create: { name, email } })
-    : await db.player.create({ data: { name } });
-  await db.salonPlayer.upsert({
-    where: { salonId_playerId: { salonId: salon.id, playerId: player.id } },
-    update: {},
-    create: { salonId: salon.id, playerId: player.id, elo: STARTING_ELO[level] ?? STARTING_ELO.ORTA },
-  });
+  await addSalonPlayer(salon.id, { name, email: String(formData.get("email") ?? ""), level: String(formData.get("level")) });
   revalidatePath("/oyuncular");
 }
 
@@ -33,7 +20,7 @@ export default async function PlayersPage() {
   const salon = await currentSalon();
   const players = await db.salonPlayer.findMany({
     where: { salonId: salon.id },
-    include: { player: true },
+    include: { player: true, eloHistory: { orderBy: { createdAt: "desc" }, take: 1 } },
     orderBy: { elo: "desc" },
   });
   return (
@@ -48,25 +35,30 @@ export default async function PlayersPage() {
             {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
           </select>
         </div>
-        <button className="btn">Oyuncu ekle</button>
+        <button className="btn btn-accent">Oyuncu ekle</button>
       </form>
-      <table className="card w-full text-sm">
-        <thead><tr className="text-left text-zinc-500"><th className="py-2">#</th><th>Oyuncu</th><th>ELO</th><th>Maç</th></tr></thead>
-        <tbody className="divide-y">
+      <section className="card p-0">
+        <ol className="divide-y divide-zinc-100">
           {players.map((p, i) => (
-            <tr key={p.id}>
-              <td className="py-2">{i + 1}</td>
-              <td>{p.player.name}</td>
-              <td className="font-medium">{p.elo}</td>
-              <td>
-                {p.matchesCount}
-                {p.matchesCount < 5 && <span className="ml-2 rounded bg-amber-100 px-1.5 text-xs text-amber-800">geçici</span>}
-                {p.matchesCount < PROVISIONAL_MATCHES && p.matchesCount >= 5 && <span className="ml-2 text-xs text-zinc-500">oturuyor</span>}
-              </td>
-            </tr>
+            <li key={p.id} className={`flex items-center gap-3 px-4 py-3 ${i < 3 ? "bg-gradient-to-r from-ball-50 to-transparent" : ""}`}>
+              <span className={`w-7 text-center font-display text-lg font-bold ${i < 3 ? "text-ball-600" : "text-zinc-400"}`}>
+                {["🥇", "🥈", "🥉"][i] ?? i + 1}
+              </span>
+              <Avatar name={p.player.name} />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{p.player.name}</div>
+                <div className="text-xs text-zinc-500">
+                  {p.matchesCount} maç
+                  {p.matchesCount < 5 && <span className="ml-2 rounded bg-ball-100 px-1.5 text-ball-600">geçici</span>}
+                  {p.matchesCount < PROVISIONAL_MATCHES && p.matchesCount >= 5 && <span className="ml-2 text-zinc-400">oturuyor</span>}
+                </div>
+              </div>
+              <EloDelta delta={p.eloHistory[0]?.delta} />
+              <span className="w-14 text-right font-display text-xl font-bold tabular-nums">{p.elo}</span>
+            </li>
           ))}
-        </tbody>
-      </table>
+        </ol>
+      </section>
     </div>
   );
 }

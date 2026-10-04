@@ -39,3 +39,68 @@ export function firstKnockoutRound(seeded: string[]): BracketSlot[] {
 export function roundNameForSize(size: number): string {
   return ROUND_NAMES[size] ?? `R${size}`;
 }
+
+/**
+ * Grup sıralamalarından eleme tohumlarını çıkarır: önce grup birincileri,
+ * sonra ikincileri..., her kademe kendi içinde ELO'ya göre. Aynı gruptan iki
+ * oyuncu ilk turda eşleşiyorsa aynı kademeden başka biriyle yer değiştirilir.
+ */
+export function knockoutSeeding(groups: string[][], perGroup: number, elo: (id: string) => number = () => 0): string[] {
+  const groupOf = new Map<string, number>();
+  groups.forEach((g, gi) => g.forEach((id) => groupOf.set(id, gi)));
+  const tiers: string[][] = [];
+  for (let t = 0; t < perGroup; t++) {
+    const tier = groups.map((g) => g[t]).filter((id): id is string => id !== undefined);
+    tiers.push(tier.sort((x, y) => elo(y) - elo(x)));
+  }
+  const seeded = tiers.flat();
+  const tierStart = tiers.map((_, t) => tiers.slice(0, t).reduce((s, x) => s + x.length, 0));
+  const tierOf = (i: number) => tierStart.findLastIndex((s) => i >= s);
+
+  const size = nextPowerOfTwo(Math.max(2, seeded.length));
+  const order = seedOrder(size).map((s) => s - 1);
+  const pairIndex = new Map<number, number>(); // tohum indeksi -> rakibinin tohum indeksi
+  for (let i = 0; i < size; i += 2) {
+    pairIndex.set(order[i], order[i + 1]);
+    pairIndex.set(order[i + 1], order[i]);
+  }
+  const clash = (i: number) => {
+    const j = pairIndex.get(i)!;
+    return j < seeded.length && groupOf.get(seeded[i]) === groupOf.get(seeded[j]);
+  };
+
+  for (let i = 0; i < seeded.length; i++) {
+    if (!clash(i)) continue;
+    // Çakışan çiftin düşük tohumunu, aynı kademeden başka biriyle değiştir
+    const low = Math.max(i, pairIndex.get(i)!);
+    for (let k = tierStart[tierOf(low)]; k < seeded.length && tierOf(k) === tierOf(low); k++) {
+      if (k === low) continue;
+      [seeded[low], seeded[k]] = [seeded[k], seeded[low]];
+      if (!clash(low) && !clash(k)) break;
+      [seeded[low], seeded[k]] = [seeded[k], seeded[low]];
+    }
+  }
+  return seeded;
+}
+
+/** Eleme maçının kazananının gideceği bir sonraki tur maçı ve yuvası. */
+export function nextKnockoutSlot(roundSize: number, order: number): { round: string; order: number; slot: "A" | "B" } | null {
+  if (roundSize <= 2) return null;
+  return { round: roundNameForSize(roundSize / 2), order: Math.floor(order / 2), slot: order % 2 === 0 ? "A" : "B" };
+}
+
+/** Tur adından o turdaki oyuncu sayısı ("QF" -> 8). */
+export function roundSize(round: string): number {
+  const named = Object.entries(ROUND_NAMES).find(([, name]) => name === round);
+  return named ? Number(named[0]) : Number(round.slice(1));
+}
+
+/** Ekranda gösterilen tur adları. */
+export const ROUND_LABELS: Record<string, string> = {
+  R32: "Son 32",
+  R16: "Son 16",
+  QF: "Çeyrek final",
+  SF: "Yarı final",
+  F: "Final",
+  "3RD": "3.lük maçı",
+};

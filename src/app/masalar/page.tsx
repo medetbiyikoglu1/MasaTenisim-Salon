@@ -51,12 +51,12 @@ export default async function TablesPage() {
           {tables.map((t) => (
             <form key={t.id} action={toggleTable}>
               <input type="hidden" name="id" value={t.id} />
-              <button className={`rounded-lg border px-4 py-3 text-sm ${t.active ? "bg-emerald-50 border-emerald-300" : "bg-zinc-100 text-zinc-400"}`}>
+              <button className={`rounded-xl border px-5 py-4 text-sm shadow-sm transition ${t.active ? "border-court-600 bg-court-50 text-court-800 font-medium" : "bg-zinc-100 text-zinc-400"}`}>
                 Masa {t.number}<br /><span className="text-xs">{t.active ? "aktif" : "kapalı"}</span>
               </button>
             </form>
           ))}
-          <form action={addTable}><button className="rounded-lg border border-dashed px-4 py-3 text-sm">+ Masa ekle</button></form>
+          <form action={addTable}><button className="rounded-xl border-2 border-dashed border-zinc-300 px-5 py-4 text-sm text-zinc-500 hover:border-court-600 hover:text-court-700">+ Masa ekle</button></form>
         </div>
       </section>
       <form action={savePrices} className="card flex flex-wrap items-end gap-3">
