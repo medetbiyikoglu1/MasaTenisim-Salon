@@ -1,4 +1,5 @@
 import { db } from "../db";
+import { rentalConflicts } from "./rental";
 import type { Prisma } from "@prisma/client";
 import {
   defaultGroupCount,
@@ -42,6 +43,10 @@ export async function createTournament(input: CreateTournamentInput) {
   if (isNaN(input.startsAt.getTime()) || isNaN(input.endsAt.getTime())) throw new TournamentError("Tarih ve saat geçerli değil");
   if (input.endsAt <= input.startsAt) throw new TournamentError("Bitiş saati başlangıçtan sonra olmalı");
   if (input.tableIds.length < 1) throw new TournamentError("En az 1 masa seçilmeli");
+  const conflicts = await rentalConflicts(input.tableIds, input.startsAt, input.endsAt);
+  if (conflicts.length > 0) {
+    throw new TournamentError(`Seçilen masalarda bu saatlerde kiralama var: ${conflicts.join("; ")}. Masayı çıkar ya da kiralamayı iptal et.`);
+  }
 
   return db.tournament.create({
     data: {
