@@ -38,6 +38,7 @@ model Salon {
   players     SalonPlayer[]
   templates   TournamentTemplate[]
   tournaments Tournament[]
+  matches     Match[]
 }
 
 model Table {
@@ -182,10 +183,13 @@ model Group {
   matches      Match[]
 }
 
+/// Turnuva maçı ya da turnuva dışı bireysel maç (tournamentId boş, salonId dolu, round "FRIENDLY").
 model Match {
   id           String       @id @default(cuid())
-  tournamentId String
-  tournament   Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  tournamentId String?
+  tournament   Tournament?  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  salonId      String?      // yalnızca bireysel maçta
+  salon        Salon?       @relation(fields: [salonId], references: [id], onDelete: Cascade)
   groupId      String?
   group        Group?       @relation(fields: [groupId], references: [id])
   round        String       // "GROUP", "QF", "SF", "F", "3RD" ...
@@ -203,6 +207,7 @@ model Match {
   eloHistory   EloHistory[]
 
   @@index([tournamentId, status])
+  @@index([salonId, finishedAt])
 }
 
 model EloHistory {

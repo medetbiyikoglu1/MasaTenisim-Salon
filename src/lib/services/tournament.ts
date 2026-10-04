@@ -1,4 +1,5 @@
 import { db } from "../db";
+import { applyResult } from "./match";
 import { rentalConflicts } from "./rental";
 import type { Prisma } from "@prisma/client";
 import {
@@ -8,10 +9,8 @@ import {
   knockoutSeeding,
   nextKnockoutSlot,
   planGroupStage,
-  rateMatch,
   roundNameForSize,
   roundSize,
-  setsWon,
   snakeGroups,
   validateMatchSets,
   type SetScore,
@@ -151,60 +150,27 @@ export async function startTournament(tournamentId: string, groupCount?: number)
  * bir sonuç düzeltiliyorsa önce o maçın ELO etkisi geri alınır, sonra yeniden hesaplanır.
  */
 export async function recordMatchResult(matchId: string, sets: SetScore[]) {
-  const match = await db.match.findUnique({ where: { id: matchId }, include: { tournament: true, eloHistory: true } });
+  const match = await db.match.findUnique({ where: { id: matchId }, include: { tournament: true } });
   if (!match) throw new TournamentError("Maç bulunamadı");
-  if (match.tournament.status === "DRAFT") throw new TournamentError("Turnuva henüz başlamadı");
-  if (match.tournament.status === "FINISHED") throw new TournamentError("Turnuva bitti; sonuç değiştirilemez");
-  const { playerAId, playerBId } = match;
+  const { tournament, tournamentId, playerAId, playerBId } = match;
+  if (!tournament || !tournamentId) throw new TournamentError("Bu maç bir turnuvaya ait değil");
+  if (tournament.status === "DRAFT") throw new TournamentError("Turnuva henüz başlamadı");
+  if (tournament.status === "FINISHED") throw new TournamentError("Turnuva bitti; sonuç değiştirilemez");
   if (!playerAId || !playerBId) throw new TournamentError("Maçın oyuncuları henüz belli değil");
-  if (match.round === "GROUP" && match.tournament.status !== "GROUPS") {
+  if (match.round === "GROUP" && tournament.status !== "GROUPS") {
     throw new TournamentError("Grup aşaması bitti; grup maçı sonucu değiştirilemez");
   }
-  if (match.status === "DONE" && match.round !== "GROUP") await assertNextNotPlayed(match);
+  const knockout = { tournamentId, round: match.round, order: match.order };
+  if (match.status === "DONE" && match.round !== "GROUP") await assertNextNotPlayed(knockout);
   try {
-    validateMatchSets(sets, match.tournament.bestOf);
+    validateMatchSets(sets, tournament.bestOf);
   } catch (e) {
     throw new TournamentError((e as Error).message);
   }
 
   await db.$transaction(async (tx) => {
-    // Düzeltme: önceki sonucun ELO etkisini geri al
-    for (const h of match.eloHistory) {
-      await tx.salonPlayer.update({
-        where: { id: h.salonPlayerId },
-        data: { elo: { decrement: h.delta }, matchesCount: { decrement: 1 } },
-      });
-    }
-    await tx.eloHistory.deleteMany({ where: { matchId } });
-
-    const [a, b] = await Promise.all([
-      tx.salonPlayer.findUniqueOrThrow({ where: { id: playerAId } }),
-      tx.salonPlayer.findUniqueOrThrow({ where: { id: playerBId } }),
-    ]);
-    const r = rateMatch({ elo: a.elo, matchesPlayed: a.matchesCount }, { elo: b.elo, matchesPlayed: b.matchesCount }, sets);
-    const [setsA, setsB] = setsWon(sets);
-
-    await tx.salonPlayer.update({ where: { id: a.id }, data: { elo: r.aAfter, matchesCount: { increment: 1 } } });
-    await tx.salonPlayer.update({ where: { id: b.id }, data: { elo: r.bAfter, matchesCount: { increment: 1 } } });
-    await tx.eloHistory.createMany({
-      data: [
-        { matchId, salonPlayerId: a.id, before: a.elo, after: r.aAfter, delta: r.aDelta },
-        { matchId, salonPlayerId: b.id, before: b.elo, after: r.bAfter, delta: r.bDelta },
-      ],
-    });
-    await tx.match.update({
-      where: { id: matchId },
-      data: {
-        sets,
-        status: "DONE",
-        winnerId: setsA > setsB ? a.id : b.id,
-        finishedAt: match.finishedAt ?? new Date(),
-      },
-    });
-    if (match.round !== "GROUP") {
-      const winner = setsA > setsB ? a.id : b.id;
-      await advanceKnockout(tx, match, winner, winner === a.id ? b.id : a.id);
-    }
+    const { winnerId, loserId } = await applyResult(tx, { id: matchId, playerAId, playerBId }, sets, match.finishedAt ?? new Date());
+    if (match.round !== "GROUP") await advanceKnockout(tx, knockout, winnerId, loserId);
   });
 }
 

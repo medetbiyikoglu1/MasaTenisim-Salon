@@ -28,7 +28,7 @@ export default async function Home() {
         <p className="relative text-sm font-medium tracking-wider text-court-100 uppercase">Hoş geldin</p>
         <h1 className="relative mb-0 text-white">{salon.name}</h1>
       </div>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Link href="/masalar" className={stat}>
           <div className="font-display text-4xl font-bold text-court-800">{tables}</div>
           <div className="text-sm text-zinc-600">aktif masa</div>
@@ -36,6 +36,10 @@ export default async function Home() {
         <Link href="/oyuncular" className={stat}>
           <div className="font-display text-4xl font-bold text-court-800">{players}</div>
           <div className="text-sm text-zinc-600">oyuncu</div>
+        </Link>
+        <Link href="/maclar" className={`${stat} bg-court-800! text-white hover:bg-court-700!`}>
+          <div className="font-display text-4xl font-bold">🏓</div>
+          <div className="text-sm text-court-100">maç gir</div>
         </Link>
         <Link href="/turnuvalar/yeni" className={`${stat} bg-ball-500! text-white hover:bg-ball-600!`}>
           <div className="font-display text-4xl font-bold">+</div>

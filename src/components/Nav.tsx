@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const NAV = [
   { href: "/", label: "Özet" },
   { href: "/turnuvalar", label: "Turnuvalar" },
+  { href: "/maclar", label: "Maçlar" },
   { href: "/oyuncular", label: "Oyuncular" },
   { href: "/masalar", label: "Masalar" },
 ];

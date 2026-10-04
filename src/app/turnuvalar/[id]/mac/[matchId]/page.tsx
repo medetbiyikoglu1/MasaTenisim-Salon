@@ -51,7 +51,7 @@ export default async function MatchPage({
     where: { id: matchId },
     include: { tournament: true, group: { include: { table: true } }, eloHistory: true },
   });
-  if (!match || match.tournamentId !== id || !match.playerAId || !match.playerBId) notFound();
+  if (!match || !match.tournament || match.tournamentId !== id || !match.playerAId || !match.playerBId) notFound();
   const players = await db.salonPlayer.findMany({
     where: { id: { in: [match.playerAId, match.playerBId] } },
     include: { player: true },

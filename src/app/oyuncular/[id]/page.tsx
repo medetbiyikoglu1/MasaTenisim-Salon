@@ -40,7 +40,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       id: h.id,
       date: m.finishedAt ?? h.createdAt,
       tournament: m.tournament,
-      stage: m.group ? `Grup ${m.group.name}` : (ROUND_LABELS[m.round] ?? m.round),
+      stage: m.group ? `Grup ${m.group.name}` : m.tournament ? (ROUND_LABELS[m.round] ?? m.round) : null,
       opponent: oppId ? opponents.get(oppId) : undefined,
       oppDelta: m.eloHistory.find((x) => x.salonPlayerId === oppId)?.delta,
       won: m.winnerId === id,
@@ -124,7 +124,14 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
                     )}
                   </div>
                   <div className="mt-0.5 truncate text-xs text-zinc-500">
-                    <Link href={`/turnuvalar/${h.tournament.id}`} className="hover:underline">{h.tournament.name}</Link> · {h.stage} ·{" "}
+                    {h.tournament ? (
+                      <>
+                        <Link href={`/turnuvalar/${h.tournament.id}`} className="hover:underline">{h.tournament.name}</Link> · {h.stage}
+                      </>
+                    ) : (
+                      <span className="rounded bg-sky-100 px-1.5 font-medium text-sky-800">Bireysel maç</span>
+                    )}{" "}
+                    ·{" "}
                     {h.date.toLocaleDateString("tr-TR", { day: "numeric", month: "short", year: "numeric" })}
                   </div>
                   <div className="mt-1.5 sm:hidden"><SetChips sets={h.sets} /></div>
