@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { Avatar, EloDelta } from "@/components/ui";
@@ -40,21 +41,27 @@ export default async function PlayersPage() {
       <section className="card p-0">
         <ol className="divide-y divide-zinc-100">
           {players.map((p, i) => (
-            <li key={p.id} className={`flex items-center gap-3 px-4 py-3 ${i < 3 ? "bg-gradient-to-r from-ball-50 to-transparent" : ""}`}>
-              <span className={`w-7 text-center font-display text-lg font-bold ${i < 3 ? "text-ball-600" : "text-zinc-400"}`}>
-                {["🥇", "🥈", "🥉"][i] ?? i + 1}
-              </span>
-              <Avatar name={p.player.name} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{p.player.name}</div>
-                <div className="text-xs text-zinc-500">
-                  {p.matchesCount} maç
-                  {p.matchesCount < 5 && <span className="ml-2 rounded bg-ball-100 px-1.5 text-ball-600">geçici</span>}
-                  {p.matchesCount < PROVISIONAL_MATCHES && p.matchesCount >= 5 && <span className="ml-2 text-zinc-400">oturuyor</span>}
+            <li key={p.id}>
+              <Link
+                href={`/oyuncular/${p.id}`}
+                className={`flex items-center gap-3 px-4 py-3 transition hover:bg-court-50 ${i < 3 ? "bg-gradient-to-r from-ball-50 to-transparent" : ""}`}
+              >
+                <span className={`w-7 text-center font-display text-lg font-bold ${i < 3 ? "text-ball-600" : "text-zinc-400"}`}>
+                  {["🥇", "🥈", "🥉"][i] ?? i + 1}
+                </span>
+                <Avatar name={p.player.name} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate font-medium">{p.player.name}</div>
+                  <div className="text-xs text-zinc-500">
+                    {p.matchesCount} maç
+                    {p.matchesCount < 5 && <span className="ml-2 rounded bg-ball-100 px-1.5 text-ball-600">geçici</span>}
+                    {p.matchesCount < PROVISIONAL_MATCHES && p.matchesCount >= 5 && <span className="ml-2 text-zinc-400">oturuyor</span>}
+                  </div>
                 </div>
-              </div>
-              <EloDelta delta={p.eloHistory[0]?.delta} />
-              <span className="w-14 text-right font-display text-xl font-bold tabular-nums">{p.elo}</span>
+                <EloDelta delta={p.eloHistory[0]?.delta} />
+                <span className="w-14 text-right font-display text-xl font-bold tabular-nums">{p.elo}</span>
+                <span className="text-zinc-300">›</span>
+              </Link>
             </li>
           ))}
         </ol>

@@ -64,13 +64,15 @@ export default async function Home() {
         </section>
         <section className="card">
           <h2>ELO liderleri</h2>
-          <ol className="space-y-2.5">
+          <ol className="space-y-1">
             {top.map((p, i) => (
-              <li key={p.id} className="flex items-center gap-2.5">
-                <span className="w-5 text-center text-sm">{["🥇", "🥈", "🥉"][i] ?? <span className="text-zinc-400">{i + 1}</span>}</span>
-                <Avatar name={p.player.name} size="sm" />
-                <span className="flex-1 truncate text-sm font-medium">{p.player.name}</span>
-                <span className="font-display text-lg font-bold tabular-nums">{p.elo}</span>
+              <li key={p.id}>
+                <Link href={`/oyuncular/${p.id}`} className="-mx-2 flex items-center gap-2.5 rounded-lg px-2 py-1 hover:bg-zinc-50">
+                  <span className="w-5 text-center text-sm">{["🥇", "🥈", "🥉"][i] ?? <span className="text-zinc-400">{i + 1}</span>}</span>
+                  <Avatar name={p.player.name} size="sm" />
+                  <span className="flex-1 truncate text-sm font-medium">{p.player.name}</span>
+                  <span className="font-display text-lg font-bold tabular-nums">{p.elo}</span>
+                </Link>
               </li>
             ))}
           </ol>
