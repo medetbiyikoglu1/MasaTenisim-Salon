@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Masa Tenisi Salon
 
-## Getting Started
+Masa tenisi salonları için turnuva yönetimi, ELO reytingi ve masa kiralama uygulaması.
 
-First, run the development server:
+## Lokal geliştirme
+
+Gerekenler: Node.js 22, Docker.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env
+docker compose up -d db        # PostgreSQL
+npm install
+npm run db:migrate             # tabloları oluşturur
+npm run db:seed                # 5 masalı pilot salonu ekler
+npm run dev                    # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Testler: `npm test`
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Sunucuda çalıştırma
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+POSTGRES_PASSWORD=guclu-bir-sifre docker compose --profile prod up -d --build
+```
 
-## Learn More
+Uygulama 3000 portunda açılır; önüne HTTPS için Caddy veya Nginx konmalıdır.
 
-To learn more about Next.js, take a look at the following resources:
+## Yapı
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+- `src/lib/tournament/`: turnuva kuralları (ELO, yılan dizilim, grup fikstürü, sıralama, eleme tablosu, masa kuyruğu) ve testleri. Veritabanından bağımsızdır.
+- `src/lib/services/`: kuralları veritabanına uygulayan servisler.
+- `src/app/`: ekranlar (özet, turnuvalar, oyuncular, masalar).
+- `prisma/schema.prisma`: veri modeli.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Durum
 
-## Deploy on Vercel
+Hazır: proje iskeleti, veri modeli, oyuncu ve masa yönetimi, hafta içi / hafta sonu ücreti, turnuva oluşturma (ELO'ya göre gruplar, her gruba masa, grup maçları, masaların kiralamaya kapatılması).
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Sırada: e-posta ile giriş, turnuva günü ekranı (otomatik masa ataması, skor girişi ve onay), eleme tablosu ve ELO güncellemesi, TV ekranı, kiralama takvimi.

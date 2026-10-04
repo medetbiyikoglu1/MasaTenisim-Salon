@@ -1,0 +1,26 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: masa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-masa}
+      POSTGRES_DB: masatenisi
+    ports:
+      - "5432:5432"
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://masa:${POSTGRES_PASSWORD:-masa}@db:5432/masatenisi
+    ports:
+      - "3000:3000"
+    profiles: ["prod"]
+
+volumes:
+  dbdata:

@@ -1,0 +1,218 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DayType {
+  WEEKDAY
+  WEEKEND
+}
+
+enum TournamentStatus {
+  DRAFT
+  GROUPS
+  KNOCKOUT
+  FINISHED
+}
+
+enum MatchStatus {
+  PENDING
+  ON_TABLE
+  AWAITING_CONFIRMATION
+  DONE
+}
+
+model Salon {
+  id          String          @id @default(cuid())
+  name        String
+  address     String?
+  openTime    String          @default("10:00") // "HH:mm"
+  closeTime   String          @default("24:00")
+  createdAt   DateTime        @default(now())
+  tables      Table[]
+  priceRules  PriceRule[]
+  players     SalonPlayer[]
+  templates   TournamentTemplate[]
+  tournaments Tournament[]
+}
+
+model Table {
+  id          String       @id @default(cuid())
+  salonId     String
+  salon       Salon        @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  number      Int
+  active      Boolean      @default(true)
+  rentals     Rental[]
+  blocks      TableBlock[]
+  groups      Group[]
+  matches     Match[]
+
+  @@unique([salonId, number])
+}
+
+/// Saatlik sabit ücret; admin hafta içi ve hafta sonu için ayrı tanımlayabilir.
+model PriceRule {
+  id         String  @id @default(cuid())
+  salonId    String
+  salon      Salon   @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  dayType    DayType
+  hourlyRate Decimal @db.Decimal(10, 2)
+
+  @@unique([salonId, dayType])
+}
+
+/// Başlangıç ve bitiş 30 dakikaya hizalı. Ödeme uygulama dışında alınır; tutar yalnızca bilgi.
+model Rental {
+  id           String   @id @default(cuid())
+  tableId      String
+  table        Table    @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  startsAt     DateTime
+  endsAt       DateTime
+  customerName String
+  amount       Decimal  @db.Decimal(10, 2)
+  createdAt    DateTime @default(now())
+
+  @@index([tableId, startsAt])
+}
+
+/// Turnuva saatlerinde masayı kiralamaya kapatan blok.
+model TableBlock {
+  id           String     @id @default(cuid())
+  tableId      String
+  table        Table      @relation(fields: [tableId], references: [id], onDelete: Cascade)
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  startsAt     DateTime
+  endsAt       DateTime
+
+  @@index([tableId, startsAt])
+}
+
+model Player {
+  id        String        @id @default(cuid())
+  name      String
+  email     String?       @unique
+  createdAt DateTime      @default(now())
+  salons    SalonPlayer[]
+}
+
+model SalonPlayer {
+  id           String        @id @default(cuid())
+  salonId      String
+  salon        Salon         @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  playerId     String
+  player       Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
+  elo          Int           @default(1500)
+  matchesCount Int           @default(0)
+  participants Participant[]
+  eloHistory   EloHistory[]
+
+  @@unique([salonId, playerId])
+}
+
+model TournamentTemplate {
+  id          String       @id @default(cuid())
+  salonId     String
+  salon       Salon        @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  name        String
+  weekday     Int          // 0 = pazar ... 5 = cuma
+  startTime   String       // "HH:mm"
+  endTime     String
+  tableIds    String[]
+  entryFee    Decimal?     @db.Decimal(10, 2)
+  active      Boolean      @default(true)
+  tournaments Tournament[]
+}
+
+model Tournament {
+  id           String              @id @default(cuid())
+  salonId      String
+  salon        Salon               @relation(fields: [salonId], references: [id], onDelete: Cascade)
+  templateId   String?
+  template     TournamentTemplate? @relation(fields: [templateId], references: [id])
+  name         String
+  startsAt     DateTime
+  endsAt       DateTime
+  division     String              @default("GENEL") // ileride ÜST / ALT klasman
+  status       TournamentStatus    @default(DRAFT)
+  entryFee     Decimal?            @db.Decimal(10, 2) // yalnızca bilgi
+  bestOf       Int                 @default(5)
+  participants Participant[]
+  prizes       Prize[]
+  groups       Group[]
+  matches      Match[]
+  blocks       TableBlock[]
+}
+
+model Participant {
+  id            String      @id @default(cuid())
+  tournamentId  String
+  tournament    Tournament  @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  salonPlayerId String
+  salonPlayer   SalonPlayer @relation(fields: [salonPlayerId], references: [id], onDelete: Cascade)
+  seed          Int?
+  groupId       String?
+  group         Group?      @relation(fields: [groupId], references: [id])
+
+  @@unique([tournamentId, salonPlayerId])
+}
+
+model Prize {
+  id           String     @id @default(cuid())
+  tournamentId String
+  tournament   Tournament @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  place        Int        // 1-3
+  name         String
+
+  @@unique([tournamentId, place])
+}
+
+model Group {
+  id           String        @id @default(cuid())
+  tournamentId String
+  tournament   Tournament    @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  name         String        // A, B, C...
+  tableId      String?
+  table        Table?        @relation(fields: [tableId], references: [id])
+  participants Participant[]
+  matches      Match[]
+}
+
+model Match {
+  id           String       @id @default(cuid())
+  tournamentId String
+  tournament   Tournament   @relation(fields: [tournamentId], references: [id], onDelete: Cascade)
+  groupId      String?
+  group        Group?       @relation(fields: [groupId], references: [id])
+  round        String       // "GROUP", "QF", "SF", "F", "3RD" ...
+  order        Int
+  playerAId    String?      // SalonPlayer id; eleme turunda henüz belli değilse boş
+  playerBId    String?
+  tableId      String?
+  table        Table?       @relation(fields: [tableId], references: [id])
+  status       MatchStatus  @default(PENDING)
+  sets         Json?        // [[11, 7], [9, 11], ...]
+  winnerId     String?
+  confirmedBy  String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  eloHistory   EloHistory[]
+
+  @@index([tournamentId, status])
+}
+
+model EloHistory {
+  id            String      @id @default(cuid())
+  matchId       String
+  match         Match       @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  salonPlayerId String
+  salonPlayer   SalonPlayer @relation(fields: [salonPlayerId], references: [id], onDelete: Cascade)
+  before        Int
+  after         Int
+  delta         Int
+  createdAt     DateTime    @default(now())
+}
