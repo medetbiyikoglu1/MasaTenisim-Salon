@@ -142,6 +142,7 @@ model Tournament {
   status       TournamentStatus    @default(DRAFT)
   entryFee     Decimal?            @db.Decimal(10, 2) // yalnızca bilgi
   bestOf       Int                 @default(5)
+  consolation  Boolean             @default(false) // grupta elenenler teselli turnuvası oynar
   participants Participant[]
   prizes       Prize[]
   groups       Group[]
@@ -193,13 +194,15 @@ model Match {
   groupId      String?
   group        Group?       @relation(fields: [groupId], references: [id])
   round        String       // "GROUP", "QF", "SF", "F", "3RD" ...
+  bracket      String       @default("MAIN") // eleme tablosu: "MAIN" ya da "CONSOLATION" (teselli)
   order        Int
   playerAId    String?      // SalonPlayer id; eleme turunda henüz belli değilse boş
   playerBId    String?
   tableId      String?
   table        Table?       @relation(fields: [tableId], references: [id])
   status       MatchStatus  @default(PENDING)
-  sets         Json?        // [[11, 7], [9, 11], ...]
+  sets         Json?        // [[11, 7], [9, 11], ...]; hükmen maçta boş
+  walkover     Boolean      @default(false) // hükmen: rakip gelmedi, ELO'ya işlenmez
   winnerId     String?
   confirmedBy  String?
   startedAt    DateTime?

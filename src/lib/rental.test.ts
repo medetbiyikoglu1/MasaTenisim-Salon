@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { daySlots, occupancyPercent, overlaps, rentalPrice, validateRentalTime, weekStart } from "./rental";
+import { daySlots, isPastSlot, nextFriday, occupancyPercent, overlaps, rentalPrice, validateRentalTime, weekStart } from "./rental";
 
 const hours = { openTime: "10:00", closeTime: "24:00" };
 const past = new Date(2026, 0, 1);
@@ -38,7 +38,7 @@ describe("kiralama", () => {
     expect(() => validateRentalTime(at(7, 21), at(7, 19), hours, past)).toThrow("Bitiş");
     expect(() => validateRentalTime(at(7, 9), at(7, 11), hours, past)).toThrow("10:00-24:00");
     expect(() => validateRentalTime(at(7, 23), at(8, 1), hours, past)).toThrow("10:00-24:00");
-    expect(() => validateRentalTime(at(7, 19), at(7, 20), hours, at(7, 19, 10))).toThrow("Geçmiş");
+    expect(() => validateRentalTime(at(7, 19), at(7, 20), hours, at(7, 19, 30))).toThrow("Geçmiş");
   });
 
   it("doluluk oranı ve haftanın pazartesisi", () => {
@@ -46,5 +46,18 @@ describe("kiralama", () => {
     expect(occupancyPercent(0, 0)).toBe(0);
     expect(weekStart(at(11, 15))).toEqual(new Date(2026, 9, 5)); // pazar -> 5 Ekim pazartesi
     expect(weekStart(at(5, 9))).toEqual(new Date(2026, 9, 5));
+  });
+
+  it("içinde bulunulan dilim kiralanabilir: 21:10'da 21:00-22:00 olur, 20:30 olmaz", () => {
+    expect(() => validateRentalTime(at(7, 21), at(7, 22), hours, at(7, 21, 10))).not.toThrow();
+    expect(() => validateRentalTime(at(7, 20, 30), at(7, 22), hours, at(7, 21, 10))).toThrow("Geçmiş");
+    expect(isPastSlot(at(7, 21), at(7, 21, 29))).toBe(false);
+    expect(isPastSlot(at(7, 21), at(7, 21, 30))).toBe(true);
+  });
+
+  it("gelecek cuma gece yarısından sonra da doğru gün (yerel saat)", () => {
+    expect(nextFriday(new Date(2026, 9, 10, 0, 7))).toBe("2026-10-16"); // cumartesi 00:07
+    expect(nextFriday(new Date(2026, 9, 9, 23, 59))).toBe("2026-10-09"); // cuma gecesi: bugün
+    expect(nextFriday(new Date(2026, 9, 5, 0, 30))).toBe("2026-10-09"); // pazartesi
   });
 });

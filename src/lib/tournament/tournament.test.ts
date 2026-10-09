@@ -6,6 +6,7 @@ import {
   firstKnockoutRound,
   groupStandings,
   knockoutSeeding,
+  splitByStanding,
   nextKnockoutSlot,
   planGroupStage,
   rateMatch,
@@ -173,5 +174,41 @@ describe("skor doğrulama", () => {
     expect(() => validateMatchSets([[11, 5], [11, 9]], 5)).toThrow("bitmemiş");
     expect(() => validateMatchSets([[11, 5], [11, 9], [11, 3], [11, 4]], 5)).toThrow("4. set girilemez");
     expect(() => validateMatchSets([], 5)).toThrow("bitmemiş");
+  });
+});
+
+describe("teselli turnuvası", () => {
+  const groups = [["A1", "A2", "A3", "A4"], ["B1", "B2", "B3"], ["C1", "C2", "C3", "C4", "C5"]];
+
+  it("ilk ikiler elemeye, kalan herkes teselliye gider", () => {
+    const r = splitByStanding(groups, 2, true);
+    expect(r.main).toEqual([["A1", "A2"], ["B1", "B2"], ["C1", "C2"]]);
+    expect(r.consolation).toEqual([["A3", "A4"], ["B3"], ["C3", "C4", "C5"]]);
+  });
+
+  it("teselli kapalıysa kimse teselliye gitmez", () => {
+    expect(splitByStanding(groups, 2, false).consolation).toEqual([]);
+  });
+
+  it("teselli tablosunda grup üçüncüleri üst tohum olur ve aynı gruptan ilk turda eşleşme olmaz", () => {
+    const groups445 = [["A1", "A2", "A3", "A4"], ["B1", "B2", "B3", "B4"], ["C1", "C2", "C3", "C4", "C5"]];
+    const { consolation } = splitByStanding(groups445, 2, true);
+    const seeded = knockoutSeeding(consolation, 3);
+    expect(seeded.slice(0, 3).sort()).toEqual(["A3", "B3", "C3"]);
+    const clashes = firstKnockoutRound(seeded).filter((m) => m.playerAId && m.playerBId && m.playerAId[0] === m.playerBId[0]);
+    expect(clashes).toEqual([]);
+  });
+});
+
+describe("hükmen", () => {
+  it("hükmen kazanan 2, gelmeyen 0 puan alır; set averajına girmez", () => {
+    const rows = groupStandings(["hasan", "zeki", "ali"], [
+      { playerAId: "hasan", playerBId: "zeki", sets: null, walkoverWinnerId: "hasan" },
+      { playerAId: "zeki", playerBId: "ali", sets: [[11, 5], [11, 5], [11, 5]] },
+    ]);
+    const by = Object.fromEntries(rows.map((r) => [r.playerId, r]));
+    expect(by.hasan).toMatchObject({ played: 1, wins: 1, losses: 0, points: 2, setsFor: 0, setsAgainst: 0 });
+    expect(by.zeki).toMatchObject({ played: 2, wins: 1, losses: 1, points: 2, setsFor: 3, setsAgainst: 0 });
+    expect(by.ali).toMatchObject({ played: 1, wins: 0, losses: 1, points: 1 });
   });
 });

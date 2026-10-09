@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { ErrorNote } from "@/components/ErrorNote";
 import { Bracket } from "@/components/Bracket";
+import { LevelPicker, TierBadge } from "@/components/tier";
 import { Avatar, EloDelta, Scoreboard, StatusBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { LEVELS, addSalonPlayer } from "@/lib/services/player";
@@ -114,6 +115,7 @@ export default async function TournamentPage({
         sets={m.sets as SetScore[] | null}
         winnerId={m.winnerId}
         done={m.status === "DONE"}
+        walkover={m.walkover}
         emptyLabel={bye ? "bay" : "belli değil"}
         href={canEdit ? `/turnuvalar/${t.id}/mac/${m.id}` : undefined}
         action={canEdit && m.status !== "DONE" ? "Sonuç gir" : undefined}
@@ -122,14 +124,27 @@ export default async function TournamentPage({
     );
   };
 
-  // Eleme turları büyükten küçüğe, 3.lük maçı en sonda
-  const rounds = [...new Set(t.matches.map((m) => m.round))].sort((x, y) => roundOrder(y) - roundOrder(x));
-  const final = t.matches.find((m) => m.round === "F");
-  const third = t.matches.find((m) => m.round === "3RD");
+  const mainMatches = t.matches.filter((m) => m.bracket !== "CONSOLATION");
+  const consolationMatches = t.matches.filter((m) => m.bracket === "CONSOLATION");
+  const final = mainMatches.find((m) => m.round === "F");
+  const third = mainMatches.find((m) => m.round === "3RD");
+  const consolationFinal = consolationMatches.find((m) => m.round === "F");
   const loserOf = (m?: typeof final) => (m?.winnerId ? (m.winnerId === m.playerAId ? m.playerBId : m.playerAId) : null);
-  // Eleme tablosuna çıkanlar: eleme maçlarında yer alan herkes
-  const qualified = new Set(t.matches.flatMap((m) => [m.playerAId, m.playerBId]).filter((x): x is string => !!x));
+  // Eleme ve teselli tablosuna çıkanlar: o tablonun maçlarında yer alan herkes
+  const playersOf = (ms: typeof t.matches) => new Set(ms.flatMap((m) => [m.playerAId, m.playerBId]).filter((x): x is string => !!x));
+  const qualified = playersOf(mainMatches);
+  const consoled = playersOf(consolationMatches);
   const podium = t.status === "FINISHED" ? [final?.winnerId, loserOf(final), third?.winnerId] : [];
+  // Eleme tablosu sütunları: turlar büyükten küçüğe (3.lük maçı ayrı gösterilir)
+  const columns = (ms: typeof t.matches) =>
+    [...new Set(ms.map((m) => m.round))]
+      .filter((r) => r !== "3RD")
+      .sort((x, y) => roundOrder(y) - roundOrder(x))
+      .map((r) => ({
+        key: r,
+        label: ROUND_LABELS[r] ?? r,
+        matches: ms.filter((m) => m.round === r).map((m) => ({ key: m.id, node: board(m) })),
+      }));
   const done = groupMatches.length - left;
 
   return (
@@ -140,32 +155,43 @@ export default async function TournamentPage({
           `${names.size} oyuncu`,
           `${t.groups.length} grup`,
           `best of ${t.bestOf}`,
+          ...(t.consolation ? ["teselli turnuvalı"] : []),
           ...(t.entryFee ? [`katılım ${t.entryFee.toString()} ₺`] : []),
         ]}
       />
       <ErrorNote message={hata} />
 
-      {podium.length > 0 && <Podium ids={podium} names={names} prizes={t.prizes} />}
+      {podium.length > 0 && (
+        <Podium
+          ids={podium}
+          names={names}
+          prizes={t.prizes}
+          consolationWinner={consolationFinal?.winnerId ? names.get(consolationFinal.winnerId) : undefined}
+        />
+      )}
 
-      {rounds.length > 0 && (
+      {mainMatches.length > 0 && (
         <section className="card">
           <h2>Eleme tablosu</h2>
-          <Bracket
-            columns={rounds
-              .filter((r) => r !== "3RD")
-              .map((r) => ({
-                key: r,
-                label: ROUND_LABELS[r] ?? r,
-                matches: t.matches.filter((m) => m.round === r).map((m) => ({ key: m.id, node: board(m) })),
-              }))}
-            champion={<Champion name={final?.winnerId ? names.get(final.winnerId) : undefined} />}
-          />
+          <Bracket columns={columns(mainMatches)} champion={<Champion name={final?.winnerId ? names.get(final.winnerId) : undefined} />} />
           {third && (
             <div className="mt-4 max-w-xs border-t border-zinc-100 pt-4">
               <h3 className="mb-2 text-xs font-semibold tracking-wider text-zinc-500 uppercase">{ROUND_LABELS["3RD"]}</h3>
               {board(third)}
             </div>
           )}
+        </section>
+      )}
+
+      {consolationMatches.length > 0 && (
+        <section className="card border-sky-200">
+          <h2>Teselli turnuvası</h2>
+          <p className="-mt-2 mb-3 text-sm text-zinc-500">Gruptan çıkamayan oyuncular kendi aralarında oynuyor.</p>
+          <Bracket
+            columns={columns(consolationMatches)}
+            championLabel="Teselli şampiyonu"
+            champion={<Champion consolation name={consolationFinal?.winnerId ? names.get(consolationFinal.winnerId) : undefined} />}
+          />
         </section>
       )}
 
@@ -181,7 +207,9 @@ export default async function TournamentPage({
               <div className="h-full rounded-full bg-court-600 transition-all" style={{ width: `${(done / Math.max(1, groupMatches.length)) * 100}%` }} />
             </div>
             <p className="mt-1.5 text-xs text-zinc-500">
-              {left > 0 ? `Grup aşamasını bitirmek için ${left} maç kaldı.` : "Tüm grup maçları bitti. Her gruptan ilk 2 oyuncu eleme tablosuna geçer."}
+              {left > 0
+                ? `Grup aşamasını bitirmek için ${left} maç kaldı.`
+                : `Tüm grup maçları bitti. Her gruptan ilk 2 oyuncu eleme tablosuna geçer${t.consolation ? ", kalanlar teselli turnuvasında oynar" : ""}.`}
             </p>
           </div>
           <button className="btn btn-accent disabled:cursor-not-allowed disabled:opacity-40" disabled={left > 0}>
@@ -198,7 +226,7 @@ export default async function TournamentPage({
               <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium">Masa {g.table?.number ?? "-"}</span>
             </div>
             <div className="p-5">
-              <GroupStandings participants={g.participants} matches={g.matches} qualified={qualified} />
+              <GroupStandings participants={g.participants} matches={g.matches} qualified={qualified} consoled={consoled} />
               <div className="grid gap-2">{g.matches.map(board)}</div>
             </div>
           </section>
@@ -208,7 +236,7 @@ export default async function TournamentPage({
   );
 }
 
-function Champion({ name }: { name?: string }) {
+function Champion({ name, consolation = false }: { name?: string; consolation?: boolean }) {
   if (!name) {
     return (
       <div className="flex w-full flex-col items-center gap-1 rounded-xl border-2 border-dashed border-zinc-200 py-4 text-zinc-400">
@@ -218,8 +246,10 @@ function Champion({ name }: { name?: string }) {
     );
   }
   return (
-    <div className="flex w-full flex-col items-center gap-1.5 rounded-xl bg-gradient-to-b from-ball-500 to-ball-600 py-4 text-white shadow-md">
-      <span className="text-3xl">🏆</span>
+    <div
+      className={`flex w-full flex-col items-center gap-1.5 rounded-xl bg-gradient-to-b py-4 text-white shadow-md ${consolation ? "from-sky-500 to-sky-600" : "from-ball-500 to-ball-600"}`}
+    >
+      <span className="text-3xl">{consolation ? "🎖️" : "🏆"}</span>
       <Avatar name={name} size="lg" />
       <span className="font-display text-lg font-bold">{name}</span>
     </div>
@@ -273,7 +303,14 @@ function Hero({ t, facts }: HeroProps) {
   );
 }
 
-function Podium({ ids, names, prizes }: { ids: (string | null | undefined)[]; names: Map<string, string>; prizes: { place: number; name: string }[] }) {
+type PodiumProps = {
+  ids: (string | null | undefined)[];
+  names: Map<string, string>;
+  prizes: { place: number; name: string }[];
+  consolationWinner?: string;
+};
+
+function Podium({ ids, names, prizes, consolationWinner }: PodiumProps) {
   // Görsel sıra: 2 - 1 - 3
   const order = [1, 0, 2];
   const height = ["h-28", "h-20", "h-14"];
@@ -301,6 +338,13 @@ function Podium({ ids, names, prizes }: { ids: (string | null | undefined)[]; na
           );
         })}
       </div>
+      {consolationWinner && (
+        <p className="mt-4 flex items-center justify-center gap-2 border-t border-zinc-100 pt-3 text-sm">
+          <span>🎖️ Teselli şampiyonu:</span>
+          <Avatar name={consolationWinner} size="sm" />
+          <span className="font-semibold">{consolationWinner}</span>
+        </p>
+      )}
     </section>
   );
 }
@@ -356,6 +400,7 @@ async function DraftTournament({ t, hata }: DraftProps) {
               <li key={p.id} className="flex items-center gap-2.5 rounded-lg border border-zinc-200 px-3 py-2">
                 <Avatar name={p.salonPlayer.player.name} />
                 <span className="min-w-0 flex-1 truncate font-medium">{p.salonPlayer.player.name}</span>
+                <TierBadge elo={p.salonPlayer.elo} compact />
                 <span className="tabular-nums text-zinc-400">{p.salonPlayer.elo}</span>
                 <form action={remove}>
                   <input type="hidden" name="id" value={t.id} />
@@ -373,12 +418,7 @@ async function DraftTournament({ t, hata }: DraftProps) {
         <h2 className="w-full">Yeni oyuncu kaydet ve ekle</h2>
         <div><label className="label">Ad soyad</label><input name="name" required className="input" /></div>
         <div><label className="label">E-posta (isteğe bağlı)</label><input name="email" type="email" className="input" /></div>
-        <div>
-          <label className="label">Başlangıç seviyesi</label>
-          <select name="level" defaultValue="ORTA" className="input">
-            {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-          </select>
-        </div>
+        <LevelPicker levels={LEVELS} />
         <button className="btn">Ekle</button>
       </form>
 
@@ -392,6 +432,7 @@ async function DraftTournament({ t, hata }: DraftProps) {
                 <input type="checkbox" name="players" value={p.id} className="accent-court-700" />
                 <Avatar name={p.player.name} size="sm" />
                 <span className="flex-1 truncate">{p.player.name}</span>
+                <TierBadge elo={p.elo} compact />
                 <span className="tabular-nums text-zinc-400">{p.elo}</span>
               </label>
             ))}
@@ -410,16 +451,19 @@ type GroupProps = {
     playerBId: string | null;
     status: string;
     sets: unknown;
+    walkover: boolean;
+    winnerId: string | null;
     eloHistory: { salonPlayerId: string; delta: number }[];
   }[];
   qualified: Set<string>;
+  consoled: Set<string>;
 };
 
 /** Grup sıralaması (ITTF): galibiyet 2, mağlubiyet 1 puan; eşitlikte ikili maçlar. */
-function GroupStandings({ participants, matches, qualified }: GroupProps) {
+function GroupStandings({ participants, matches, qualified, consoled }: GroupProps) {
   const finished = matches
     .filter((m) => m.status === "DONE" && m.playerAId && m.playerBId)
-    .map((m) => ({ playerAId: m.playerAId!, playerBId: m.playerBId!, sets: m.sets as SetScore[] }));
+    .map((m) => ({ playerAId: m.playerAId!, playerBId: m.playerBId!, sets: m.sets as SetScore[] | null, walkoverWinnerId: m.walkover ? m.winnerId : null }));
   const byId = new Map(participants.map((p) => [p.salonPlayerId, p.salonPlayer]));
   const rows = groupStandings(participants.map((p) => p.salonPlayerId), finished);
   // Bu gruptaki maçlardan gelen toplam ELO değişimi
@@ -453,9 +497,13 @@ function GroupStandings({ participants, matches, qualified }: GroupProps) {
                 <span className="flex items-center gap-2">
                   <Avatar name={sp.player.name} size="sm" />
                   <span className="truncate font-medium">{sp.player.name}</span>
+                  <TierBadge elo={sp.elo} compact />
                   <span className="text-xs tabular-nums text-zinc-400">{sp.elo}</span>
                   <EloDelta delta={delta.get(r.playerId)} />
                   {up && <span className="rounded-full bg-court-700 px-1.5 text-[10px] font-semibold tracking-wide text-white uppercase">↑ Eleme</span>}
+                  {consoled.has(r.playerId) && (
+                    <span className="rounded-full bg-sky-100 px-1.5 text-[10px] font-semibold tracking-wide text-sky-800 uppercase">Teselli</span>
+                  )}
                 </span>
               </td>
               <td className="px-1.5 text-right tabular-nums text-zinc-600">{r.played}</td>

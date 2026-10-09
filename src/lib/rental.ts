@@ -46,7 +46,8 @@ export function atMinutes(day: Date, minutes: number): Date {
 
 /**
  * Kiralama saatlerini doğrular: 30 dakikaya hizalı, en az 30 dakika,
- * aynı gün içinde ve çalışma saatleri arasında, geçmişte değil.
+ * aynı gün içinde ve çalışma saatleri arasında. Başlangıç, içinde bulunulan
+ * dilimden önce olamaz (21:10'da 21:00'den başlayan kiralama yapılabilir).
  * Geçersizse açıklayıcı bir hata fırlatır.
  */
 export function validateRentalTime(
@@ -65,7 +66,12 @@ export function validateRentalTime(
   if (startsAt < open || endsAt > close) {
     throw new Error(`Salon ${hours.openTime}-${hours.closeTime} arası açık; kiralama bu saatlerin içinde olmalı`);
   }
-  if (startsAt < now) throw new Error("Geçmiş bir saat için kiralama yapılamaz");
+  if (isPastSlot(startsAt, now)) throw new Error("Geçmiş bir saat için kiralama yapılamaz");
+}
+
+/** Dilim tamamen geçmişte mi? İçinde bulunulan dilim geçmiş sayılmaz. */
+export function isPastSlot(slotStart: Date, now: Date = new Date()): boolean {
+  return slotStart.getTime() + SLOT_MINUTES * 60_000 <= now.getTime();
 }
 
 /** Doluluk oranı (0-100): dolu dilim / açık dilim. */
@@ -91,4 +97,11 @@ export function parseYmd(s: string | undefined): Date | null {
   if (!m) return null;
   const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
   return isNaN(d.getTime()) ? null : d;
+}
+
+/** Bir sonraki cuma (bugün cumaysa bugün), yerel saatle "YYYY-MM-DD". */
+export function nextFriday(now: Date = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
+  return ymd(d);
 }

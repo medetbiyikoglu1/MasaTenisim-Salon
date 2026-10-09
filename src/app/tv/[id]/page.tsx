@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { AutoRefresh, Clock } from "@/components/AutoRefresh";
 import { Bracket } from "@/components/Bracket";
+import { TierBadge } from "@/components/tier";
 import { Avatar, Scoreboard, StatusBadge } from "@/components/ui";
 import { db } from "@/lib/db";
-import { ROUND_LABELS, assignTables, groupStandings, roundSize, type SetScore } from "@/lib/tournament";
+import { ROUND_LABELS, assignTables, groupStandings, knockoutLabel, roundSize, type SetScore } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
 
@@ -27,11 +28,15 @@ export default async function TvPage({ params }: { params: Promise<{ id: string 
 
   const names = new Map(t.participants.map((p) => [p.salonPlayerId, p.salonPlayer.player.name]));
   const name = (pid: string | null) => (pid ? names.get(pid) ?? "?" : "?");
+  const elos = new Map(t.participants.map((p) => [p.salonPlayerId, p.salonPlayer.elo]));
+  const eloOf = (pid: string) => elos.get(pid) ?? 0;
   const tables = [...new Map(t.blocks.map((b) => [b.tableId, b.table])).values()];
   const groupTable = new Map(t.groups.map((g) => [g.id, g.tableId]));
 
   // Masa ataması kalıcı tutulmuyor; kuyruk kurallarıyla şu anki öneri hesaplanır
-  const active = t.status === "GROUPS" ? t.matches.filter((m) => m.round === "GROUP") : t.matches.filter((m) => m.round !== "GROUP");
+  // Bay geçilen eleme maçları oynanmadığı için sayaca ve masa önerisine girmez
+  const isBye = (m: (typeof t.matches)[number]) => m.status === "DONE" && (!m.playerAId || !m.playerBId);
+  const active = t.matches.filter((m) => (t.status === "GROUPS" ? m.round === "GROUP" : m.round !== "GROUP") && !isBye(m));
   const assignments = assignTables(
     active.map((m) => ({
       id: m.id,
@@ -49,13 +54,13 @@ export default async function TvPage({ params }: { params: Promise<{ id: string 
   const onTable = new Map(assignments.map((a) => [a.tableId, t.matches.find((m) => m.id === a.matchId)!]));
   const assigned = new Set(assignments.map((a) => a.matchId));
   const queue = active.filter((m) => m.status === "PENDING" && m.playerAId && m.playerBId && !assigned.has(m.id)).slice(0, 6);
-  const matchLabel = (m: (typeof t.matches)[number]) => (m.group ? `Grup ${m.group.name}` : ROUND_LABELS[m.round] ?? m.round);
+  const matchLabel = (m: (typeof t.matches)[number]) => (m.group ? `Grup ${m.group.name}` : knockoutLabel(m.round, m.bracket));
   const done = active.filter((m) => m.status === "DONE").length;
 
-  const final = t.matches.find((m) => m.round === "F");
-  const knockoutRounds = [...new Set(t.matches.filter((m) => m.round !== "GROUP" && m.round !== "3RD").map((m) => m.round))].sort(
-    (x, y) => roundSize(y) - roundSize(x),
-  );
+  const main = t.matches.filter((m) => m.round !== "GROUP" && m.bracket !== "CONSOLATION");
+  const consolation = t.matches.filter((m) => m.bracket === "CONSOLATION");
+  const final = main.find((m) => m.round === "F");
+  const consolationFinal = consolation.find((m) => m.round === "F");
 
   return (
     <div className="fixed inset-0 z-50 overflow-auto bg-court-950 p-6 text-white xl:p-10">
@@ -134,7 +139,7 @@ export default async function TvPage({ params }: { params: Promise<{ id: string 
       {t.status === "FINISHED" && (
         <section className="mb-10 flex flex-wrap items-end justify-center gap-6">
           {[1, 0, 2].map((i) => {
-            const third = t.matches.find((m) => m.round === "3RD");
+            const third = main.find((m) => m.round === "3RD");
             const loser = final && (final.winnerId === final.playerAId ? final.playerBId : final.playerAId);
             const pid = [final?.winnerId, loser, third?.winnerId][i];
             if (!pid) return null;
@@ -158,7 +163,7 @@ export default async function TvPage({ params }: { params: Promise<{ id: string 
           {t.groups.map((g) => {
             const finished = t.matches
               .filter((m) => m.groupId === g.id && m.status === "DONE" && m.playerAId && m.playerBId)
-              .map((m) => ({ playerAId: m.playerAId!, playerBId: m.playerBId!, sets: m.sets as SetScore[] }));
+              .map((m) => ({ playerAId: m.playerAId!, playerBId: m.playerBId!, sets: m.sets as SetScore[] | null, walkoverWinnerId: m.walkover ? m.winnerId : null }));
             const rows = groupStandings(g.participants.map((p) => p.salonPlayerId), finished);
             return (
               <div key={g.id} className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
@@ -176,7 +181,12 @@ export default async function TvPage({ params }: { params: Promise<{ id: string 
                     {rows.map((r, i) => (
                       <tr key={r.playerId} className="border-t border-white/10">
                         <td className={`py-2 font-display text-2xl font-bold ${i < 2 ? "text-ball-500" : "text-court-100/50"}`}>{i + 1}</td>
-                        <td className="py-2 font-medium">{name(r.playerId)}</td>
+                        <td className="py-2 font-medium">
+                          <span className="flex items-center gap-2">
+                            <TierBadge elo={eloOf(r.playerId)} compact />
+                            {name(r.playerId)}
+                          </span>
+                        </td>
                         <td className="py-2 text-right tabular-nums text-court-100/80">{r.wins}-{r.losses}</td>
                         <td className="py-2 text-right font-display text-2xl font-bold tabular-nums">{r.points}</td>
                       </tr>
@@ -189,43 +199,66 @@ export default async function TvPage({ params }: { params: Promise<{ id: string 
         </section>
       )}
 
-      {knockoutRounds.length > 0 && (
-        <section className="rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
-          <h2 className="mb-4 font-display text-3xl font-bold text-white">Eleme tablosu</h2>
-          <Bracket
-            dark
-            columns={knockoutRounds.map((r) => ({
-              key: r,
-              label: ROUND_LABELS[r] ?? r,
-              matches: t.matches
-                .filter((m) => m.round === r)
-                .map((m) => ({
-                  key: m.id,
-                  node: (
-                    <Scoreboard
-                      a={m.playerAId ? { id: m.playerAId, name: name(m.playerAId) } : null}
-                      b={m.playerBId ? { id: m.playerBId, name: name(m.playerBId) } : null}
-                      sets={m.sets as SetScore[] | null}
-                      winnerId={m.winnerId}
-                      done={m.status === "DONE"}
-                      emptyLabel={m.status === "DONE" ? "bay" : "belli değil"}
-                    />
-                  ),
-                })),
-            }))}
-            champion={
-              final?.winnerId ? (
-                <div className="flex w-full flex-col items-center gap-2 rounded-2xl bg-ball-500 py-5 text-white">
-                  <span className="text-4xl">🏆</span>
-                  <span className="font-display text-2xl font-bold">{name(final.winnerId)}</span>
-                </div>
-              ) : (
-                <div className="w-full rounded-2xl border-2 border-dashed border-white/20 py-6 text-center text-4xl opacity-50">🏆</div>
-              )
-            }
-          />
-        </section>
+      {t.status === "FINISHED" && consolationFinal?.winnerId && (
+        <p className="mb-8 text-center font-display text-3xl">
+          🎖️ Teselli şampiyonu: <span className="font-bold text-sky-300">{name(consolationFinal.winnerId)}</span>
+        </p>
       )}
+
+      {[
+        { key: "MAIN", title: "Eleme tablosu", matches: main, winner: final?.winnerId, champLabel: "Şampiyon", icon: "🏆", color: "bg-ball-500" },
+        {
+          key: "CONSOLATION",
+          title: "Teselli turnuvası",
+          matches: consolation,
+          winner: consolationFinal?.winnerId,
+          champLabel: "Teselli şampiyonu",
+          icon: "🎖️",
+          color: "bg-sky-500",
+        },
+      ]
+        .filter((b) => b.matches.length > 0)
+        .map((b) => (
+          <section key={b.key} className="mb-6 rounded-2xl bg-white/5 p-5 ring-1 ring-white/10">
+            <h2 className="mb-4 font-display text-3xl font-bold text-white">{b.title}</h2>
+            <Bracket
+              dark
+              championLabel={b.champLabel}
+              columns={[...new Set(b.matches.filter((m) => m.round !== "3RD").map((m) => m.round))]
+                .sort((x, y) => roundSize(y) - roundSize(x))
+                .map((r) => ({
+                  key: r,
+                  label: ROUND_LABELS[r] ?? r,
+                  matches: b.matches
+                    .filter((m) => m.round === r)
+                    .map((m) => ({
+                      key: m.id,
+                      node: (
+                        <Scoreboard
+                          a={m.playerAId ? { id: m.playerAId, name: name(m.playerAId) } : null}
+                          b={m.playerBId ? { id: m.playerBId, name: name(m.playerBId) } : null}
+                          sets={m.sets as SetScore[] | null}
+                          winnerId={m.winnerId}
+                          done={m.status === "DONE"}
+                          walkover={m.walkover}
+                          emptyLabel={m.status === "DONE" ? "bay" : "belli değil"}
+                        />
+                      ),
+                    })),
+                }))}
+              champion={
+                b.winner ? (
+                  <div className={`flex w-full flex-col items-center gap-2 rounded-2xl py-5 text-white ${b.color}`}>
+                    <span className="text-4xl">{b.icon}</span>
+                    <span className="font-display text-2xl font-bold">{name(b.winner)}</span>
+                  </div>
+                ) : (
+                  <div className="w-full rounded-2xl border-2 border-dashed border-white/20 py-6 text-center text-4xl opacity-50">{b.icon}</div>
+                )
+              }
+            />
+          </section>
+        ))}
     </div>
   );
 }

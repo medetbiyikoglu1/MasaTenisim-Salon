@@ -67,13 +67,15 @@ export type ScoreboardProps = {
   action?: string;
   /** Fareyle üzerine gelince ipucu */
   title?: string;
+  /** Hükmen sonuç: set yok, kazanan "hükmen", diğeri "gelmedi" */
+  walkover?: boolean;
 };
 
 /**
  * Skor tabelası görünümünde maç: her oyuncu bir satır, setler sütun,
  * en sağda alınan set sayısı. Kazanan satır vurgulu.
  */
-export function Scoreboard({ a, b, sets, winnerId, done, emptyLabel = "?", href, action, title }: ScoreboardProps) {
+export function Scoreboard({ a, b, sets, winnerId, done, emptyLabel = "?", href, action, title, walkover = false }: ScoreboardProps) {
   const list = sets ?? [];
   const won = [0, 0];
   for (const [x, y] of list) won[x > y ? 0 : 1]++;
@@ -97,6 +99,13 @@ export function Scoreboard({ a, b, sets, winnerId, done, emptyLabel = "?", href,
             </span>
           ))}
         </span>
+        {done && walkover && side && (
+          <span
+            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tracking-wide uppercase ${winner ? "bg-court-800 text-white" : "bg-red-100 text-red-700"}`}
+          >
+            {winner ? "hükmen" : "gelmedi"}
+          </span>
+        )}
         {done && list.length > 0 && (
           <span className={`flex h-6 w-6 items-center justify-center rounded text-sm font-bold tabular-nums ${winner ? "bg-court-800 text-white" : "bg-zinc-100 text-zinc-500"}`}>
             {won[i]}

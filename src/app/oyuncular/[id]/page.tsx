@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { TierBadge } from "@/components/tier";
 import { Avatar, EloDelta } from "@/components/ui";
 import { db } from "@/lib/db";
-import { PROVISIONAL_MATCHES, ROUND_LABELS, setsWon, type SetScore } from "@/lib/tournament";
+import { PROVISIONAL_MATCHES, knockoutLabel, setsWon, type SetScore } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
       id: h.id,
       date: m.finishedAt ?? h.createdAt,
       tournament: m.tournament,
-      stage: m.group ? `Grup ${m.group.name}` : m.tournament ? (ROUND_LABELS[m.round] ?? m.round) : null,
+      stage: m.group ? `Grup ${m.group.name}` : m.tournament ? knockoutLabel(m.round, m.bracket) : null,
       opponent: oppId ? opponents.get(oppId) : undefined,
       oppDelta: m.eloHistory.find((x) => x.salonPlayerId === oppId)?.delta,
       won: m.winnerId === id,
@@ -69,7 +70,9 @@ export default async function PlayerPage({ params }: { params: Promise<{ id: str
         <div className="relative flex flex-wrap items-center gap-5">
           <Avatar name={sp.player.name} size="lg" />
           <div className="flex-1">
-            <h1 className="mb-0 text-white">{sp.player.name}</h1>
+            <h1 className="mb-0 flex flex-wrap items-center gap-3 text-white">
+              {sp.player.name} <TierBadge elo={sp.elo} />
+            </h1>
             <p className="text-sm text-court-100">
               Sıralamada {rank + 1}. / {total}
               {sp.matchesCount < PROVISIONAL_MATCHES && " · ELO henüz oturmadı"}

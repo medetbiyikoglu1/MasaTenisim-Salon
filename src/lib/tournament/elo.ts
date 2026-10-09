@@ -4,10 +4,15 @@ export const PROVISIONAL_MATCHES = 10;
 export const K_PROVISIONAL = 40;
 export const K_ESTABLISHED = 20;
 
+/** Oyuncu eklenirken seçilen seviyeye göre başlangıç ELO'su. */
 export const STARTING_ELO = {
+  YENI: 1000,
   BASLANGIC: 1200,
+  GELISEN: 1350,
   ORTA: 1500,
+  IYI: 1650,
   ILERI: 1800,
+  USTA: 2000,
 } as const;
 
 export function expectedScore(ratingA: number, ratingB: number): number {

@@ -3,11 +3,16 @@ import { STARTING_ELO } from "../tournament";
 
 export type Level = keyof typeof STARTING_ELO;
 
-export const LEVELS = [
-  { value: "BASLANGIC", label: "Başlangıç (1200)" },
-  { value: "ORTA", label: "Orta (1500)" },
-  { value: "ILERI", label: "İleri (1800)" },
-] as const;
+/** Oyuncu eklerken seçilen başlangıç seviyeleri (zayıftan güçlüye). */
+export const LEVELS: { value: Level; label: string; hint: string }[] = [
+  { value: "YENI", label: "Yeni başlayan", hint: "Raketi yeni eline almış" },
+  { value: "BASLANGIC", label: "Başlangıç", hint: "Topu karşıya atabiliyor, ralli kısa" },
+  { value: "GELISEN", label: "Gelişen", hint: "Düzenli oynuyor, temel vuruşlar oturuyor" },
+  { value: "ORTA", label: "Orta", hint: "Ralli yapıyor, servis ve spin kullanıyor" },
+  { value: "IYI", label: "İyi", hint: "Atak ve savunması güçlü, sık kazanıyor" },
+  { value: "ILERI", label: "İleri", hint: "Kulüp seviyesinde, salonun en iyilerinden" },
+  { value: "USTA", label: "Usta", hint: "Lisanslı ya da turnuva tecrübeli" },
+];
 
 /** Oyuncuyu (e-posta varsa mevcut kaydı kullanarak) salona ekler ve SalonPlayer kaydını döner. */
 export async function addSalonPlayer(salonId: string, input: { name: string; email?: string | null; level?: string }) {

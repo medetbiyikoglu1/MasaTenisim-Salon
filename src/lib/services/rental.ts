@@ -4,6 +4,7 @@ import {
   atMinutes,
   daySlots,
   fromMinutes,
+  isPastSlot,
   occupancyPercent,
   overlaps,
   rentalPrice,
@@ -113,7 +114,7 @@ export async function weekCalendar(tableId: string, monday: Date, now: Date = ne
         busy++;
         return { time, kind: "block", label: b.tournament.name, first: b.startsAt >= slot.startsAt };
       }
-      return { time, kind: slot.startsAt < now ? "past" : "free" };
+      return { time, kind: isPastSlot(slot.startsAt, now) ? "past" : "free" };
     });
     days.push({ date: ymd(day), slots });
   }

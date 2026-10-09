@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TierBadge } from "@/components/tier";
 import { Avatar, StatusBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { currentSalon } from "@/lib/salon";
@@ -75,6 +76,7 @@ export default async function Home() {
                   <span className="w-5 text-center text-sm">{["🥇", "🥈", "🥉"][i] ?? <span className="text-zinc-400">{i + 1}</span>}</span>
                   <Avatar name={p.player.name} size="sm" />
                   <span className="flex-1 truncate text-sm font-medium">{p.player.name}</span>
+                  <TierBadge elo={p.elo} compact />
                   <span className="font-display text-lg font-bold tabular-nums">{p.elo}</span>
                 </Link>
               </li>

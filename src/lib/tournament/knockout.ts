@@ -71,10 +71,12 @@ export function knockoutSeeding(groups: string[][], perGroup: number, elo: (id: 
 
   for (let i = 0; i < seeded.length; i++) {
     if (!clash(i)) continue;
-    // Çakışan çiftin düşük tohumunu, aynı kademeden başka biriyle değiştir
+    // Çakışan çiftin düşük tohumunu önce aynı kademeden, olmazsa üst kademe
+    // dışındaki herhangi biriyle değiştir (üst tohumların yeri korunur)
     const low = Math.max(i, pairIndex.get(i)!);
-    for (let k = tierStart[tierOf(low)]; k < seeded.length && tierOf(k) === tierOf(low); k++) {
-      if (k === low) continue;
+    const sameTier = [...seeded.keys()].filter((k) => k !== low && tierOf(k) === tierOf(low));
+    const lowerTiers = [...seeded.keys()].filter((k) => k !== low && tierOf(k) > 0 && tierOf(k) !== tierOf(low));
+    for (const k of [...sameTier, ...lowerTiers]) {
       [seeded[low], seeded[k]] = [seeded[k], seeded[low]];
       if (!clash(low) && !clash(k)) break;
       [seeded[low], seeded[k]] = [seeded[k], seeded[low]];
@@ -104,3 +106,28 @@ export const ROUND_LABELS: Record<string, string> = {
   F: "Final",
   "3RD": "3.lük maçı",
 };
+
+export type Bracket = "MAIN" | "CONSOLATION";
+export const BRACKET_LABELS: Record<Bracket, string> = { MAIN: "Eleme", CONSOLATION: "Teselli" };
+
+/**
+ * Grup sıralamalarını ikiye ayırır: her gruptan ilk `advance` oyuncu ana
+ * elemeye, geri kalanlar (teselli açıksa) teselli turnuvasına gider.
+ * Her iki liste de grup başına, sıralama düzeninde döner.
+ */
+export function splitByStanding(
+  groups: string[][],
+  advance: number,
+  consolation: boolean,
+): { main: string[][]; consolation: string[][] } {
+  return {
+    main: groups.map((g) => g.slice(0, advance)),
+    consolation: consolation ? groups.map((g) => g.slice(advance)) : [],
+  };
+}
+
+/** Eleme maçının ekrandaki adı; teselli tablosundakiler "Teselli · Yarı final" gibi. */
+export function knockoutLabel(round: string, bracket: string): string {
+  const name = ROUND_LABELS[round] ?? round;
+  return bracket === "CONSOLATION" ? `${BRACKET_LABELS.CONSOLATION} · ${name}` : name;
+}

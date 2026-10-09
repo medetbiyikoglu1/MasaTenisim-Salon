@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
+import { LevelPicker, TierBadge, TierIcon } from "@/components/tier";
 import { Avatar, EloDelta } from "@/components/ui";
+import { TIERS, tierMax } from "@/lib/tiers";
 import { currentSalon } from "@/lib/salon";
 import { LEVELS, addSalonPlayer } from "@/lib/services/player";
 import { PROVISIONAL_MATCHES } from "@/lib/tournament";
@@ -27,17 +29,15 @@ export default async function PlayersPage() {
   return (
     <div className="space-y-6">
       <h1>Oyuncular ve ELO sıralaması</h1>
-      <form action={addPlayer} className="card flex flex-wrap items-end gap-3">
-        <div><label className="label">Ad soyad</label><input name="name" required className="input" /></div>
-        <div><label className="label">E-posta (giriş için)</label><input name="email" type="email" className="input" /></div>
-        <div>
-          <label className="label">Başlangıç seviyesi</label>
-          <select name="level" defaultValue="ORTA" className="input">
-            {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-          </select>
+      <form action={addPlayer} className="card space-y-4">
+        <div className="flex flex-wrap gap-3">
+          <div><label className="label">Ad soyad</label><input name="name" required className="input" /></div>
+          <div><label className="label">E-posta (giriş için)</label><input name="email" type="email" className="input" /></div>
         </div>
+        <LevelPicker levels={LEVELS} />
         <button className="btn btn-accent">Oyuncu ekle</button>
       </form>
+      <TierLegend />
       <section className="card p-0">
         <ol className="divide-y divide-zinc-100">
           {players.map((p, i) => (
@@ -51,7 +51,10 @@ export default async function PlayersPage() {
                 </span>
                 <Avatar name={p.player.name} />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate font-medium">{p.player.name}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="truncate font-medium">{p.player.name}</span>
+                    <TierBadge elo={p.elo} />
+                  </div>
                   <div className="text-xs text-zinc-500">
                     {p.matchesCount} maç
                     {p.matchesCount < 5 && <span className="ml-2 rounded bg-ball-100 px-1.5 text-ball-600">geçici</span>}
@@ -67,5 +70,25 @@ export default async function PlayersPage() {
         </ol>
       </section>
     </div>
+  );
+}
+
+/** Kademelerin ELO aralıkları ve ikonları. */
+function TierLegend() {
+  return (
+    <section className="card">
+      <h2>Kademeler</h2>
+      <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm">
+        {TIERS.map((t) => (
+          <span key={t.key} className="flex items-center gap-1.5">
+            <TierIcon tier={t} size={22} />
+            <span className="font-semibold">{t.name}</span>
+            <span className="text-xs tabular-nums text-zinc-500">
+              {t.min === 0 ? `< ${TIERS[1].min}` : tierMax(t) === null ? `${t.min}+` : `${t.min}-${tierMax(t)}`}
+            </span>
+          </span>
+        ))}
+      </div>
+    </section>
   );
 }

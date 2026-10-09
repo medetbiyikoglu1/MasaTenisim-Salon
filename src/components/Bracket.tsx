@@ -9,7 +9,17 @@ export type BracketColumn = { key: string; label: string; matches: { key: string
  * her maç kendi iki ön maçının tam ortasına denk gelir. Çizgiler kutuların
  * kenar boşluklarına çizilir.
  */
-export function Bracket({ columns, champion, dark = false }: { columns: BracketColumn[]; champion: ReactNode; dark?: boolean }) {
+export function Bracket({
+  columns,
+  champion,
+  championLabel = "Şampiyon",
+  dark = false,
+}: {
+  columns: BracketColumn[];
+  champion: ReactNode;
+  championLabel?: string;
+  dark?: boolean;
+}) {
   const LINE = dark ? "border-white/25" : "border-zinc-300";
   const labelCls = dark ? "text-court-100/70" : "text-zinc-500";
   const slots = Math.max(1, columns[0]?.matches.length ?? 1);
@@ -42,7 +52,7 @@ export function Bracket({ columns, champion, dark = false }: { columns: BracketC
           );
         })}
         <div className="flex w-48 shrink-0 flex-col">
-          <h3 className="mb-2 px-4 text-xs font-semibold tracking-wider text-ball-600 uppercase">Şampiyon</h3>
+          <h3 className="mb-2 px-4 text-xs font-semibold tracking-wider text-ball-600 uppercase">{championLabel}</h3>
           <div className="relative flex flex-1 items-center px-4" style={{ minHeight: `${slots * 5.5}rem` }}>
             <span className={`absolute top-1/2 left-0 w-4 border-t-2 ${LINE}`} />
             {champion}

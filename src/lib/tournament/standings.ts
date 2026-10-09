@@ -1,14 +1,18 @@
 import { setsWon } from "./elo";
 import type { SetScore } from "./types";
 
-export type FinishedMatch = { playerAId: string; playerBId: string; sets: SetScore[] };
+/**
+ * Biten maç. Hükmen maçta (`walkoverWinnerId` dolu) set yoktur: kazanan 2,
+ * maça gelmeyen 0 puan alır; set ve sayı averajına girmez (ITTF).
+ */
+export type FinishedMatch = { playerAId: string; playerBId: string; sets: SetScore[] | null; walkoverWinnerId?: string | null };
 
 export type Standing = {
   playerId: string;
   played: number;
   wins: number;
   losses: number;
-  points: number; // ITTF: galibiyet 2, mağlubiyet 1
+  points: number; // ITTF: galibiyet 2, mağlubiyet 1, hükmen mağlubiyet 0
   setsFor: number;
   setsAgainst: number;
   pointsFor: number;
@@ -25,10 +29,16 @@ function tally(playerIds: string[], matches: FinishedMatch[]): Map<string, Stand
     const a = rows.get(m.playerAId);
     const b = rows.get(m.playerBId);
     if (!a || !b) continue;
-    const [sa, sb] = setsWon(m.sets);
-    const pa = m.sets.reduce((s, [x]) => s + x, 0);
-    const pb = m.sets.reduce((s, [, y]) => s + y, 0);
     a.played++; b.played++;
+    if (m.walkoverWinnerId) {
+      const [w, l] = m.walkoverWinnerId === m.playerAId ? [a, b] : [b, a];
+      w.wins++; l.losses++; w.points += 2;
+      continue;
+    }
+    const sets = m.sets ?? [];
+    const [sa, sb] = setsWon(sets);
+    const pa = sets.reduce((s, [x]) => s + x, 0);
+    const pb = sets.reduce((s, [, y]) => s + y, 0);
     a.setsFor += sa; a.setsAgainst += sb; b.setsFor += sb; b.setsAgainst += sa;
     a.pointsFor += pa; a.pointsAgainst += pb; b.pointsFor += pb; b.pointsAgainst += pa;
     if (sa > sb) { a.wins++; b.losses++; a.points += 2; b.points += 1; }

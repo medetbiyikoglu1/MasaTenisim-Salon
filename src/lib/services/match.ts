@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { db } from "../db";
 import { rateMatch, setsWon, validateMatchSets, type SetScore } from "../tournament";
 
@@ -43,8 +43,17 @@ export async function applyResult(
       { matchId: match.id, salonPlayerId: b.id, before: b.elo, after: r.bAfter, delta: r.bDelta },
     ],
   });
-  await tx.match.update({ where: { id: match.id }, data: { sets, status: "DONE", winnerId, finishedAt } });
+  await tx.match.update({ where: { id: match.id }, data: { sets, status: "DONE", winnerId, finishedAt, walkover: false } });
   return { winnerId, loserId };
+}
+
+/** Hükmen sonucu yazar: set yok, ELO değişmez (önceki sonucun ELO etkisi varsa geri alınır). */
+export async function applyWalkover(tx: Tx, matchId: string, winnerId: string, finishedAt: Date) {
+  await revertElo(tx, matchId);
+  await tx.match.update({
+    where: { id: matchId },
+    data: { sets: Prisma.DbNull, status: "DONE", winnerId, finishedAt, walkover: true },
+  });
 }
 
 /** Kullanıcıya olduğu gibi gösterilebilecek doğrulama hatası. */

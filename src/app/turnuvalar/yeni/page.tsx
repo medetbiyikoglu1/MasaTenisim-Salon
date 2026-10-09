@@ -1,17 +1,11 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { nextFriday } from "@/lib/rental";
 import { currentSalon } from "@/lib/salon";
 import { ErrorNote } from "@/components/ErrorNote";
 import { TournamentError, createTournament } from "@/lib/services/tournament";
 
 export const dynamic = "force-dynamic";
-
-/** Bir sonraki cuma (bugün cumaysa bugün), YYYY-MM-DD */
-function nextFriday(): string {
-  const d = new Date();
-  d.setDate(d.getDate() + ((5 - d.getDay() + 7) % 7));
-  return d.toISOString().slice(0, 10);
-}
 
 async function create(formData: FormData) {
   "use server";
@@ -28,6 +22,7 @@ async function create(formData: FormData) {
       entryFee: fee ? Number(fee) : null,
       prizes: [1, 2, 3].map((i) => String(formData.get(`prize${i}`) ?? "")),
       tableIds: formData.getAll("tables").map(String),
+      consolation: formData.get("consolation") === "on",
     });
     id = t.id;
   } catch (e) {
@@ -64,6 +59,19 @@ export default async function NewTournamentPage({ searchParams }: { searchParams
             </label>
           ))}
         </div>
+      </section>
+      <section className="card">
+        <h2>Format</h2>
+        <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-zinc-200 p-3 has-checked:border-court-600 has-checked:bg-court-50">
+          <input type="checkbox" name="consolation" className="mt-1 accent-court-700" />
+          <span>
+            <span className="block font-medium">Teselli turnuvası olsun</span>
+            <span className="block text-sm text-zinc-600">
+              Her gruptan ilk 2 oyuncu normal eleme tablosuna geçer; gruptan çıkamayanlar kendi aralarında ayrı bir teselli
+              eleme tablosunda oynar. Böylece grupta elenenler de daha fazla maç yapar.
+            </span>
+          </span>
+        </label>
       </section>
       <p className="text-sm text-zinc-600">Katılımcıları turnuvayı oluşturduktan sonra, turnuva başlayana kadar ekleyebilirsin.</p>
       <button className="btn btn-accent">Turnuvayı oluştur</button>
