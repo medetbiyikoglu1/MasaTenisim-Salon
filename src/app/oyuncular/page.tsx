@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getSession, requireAdmin } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { LevelPicker, TierBadge, TierIcon } from "@/components/tier";
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 async function addPlayer(formData: FormData) {
   "use server";
+  await requireAdmin();
   const salon = await currentSalon();
   const name = String(formData.get("name") ?? "").trim();
   if (!name) return;
@@ -21,6 +23,7 @@ async function addPlayer(formData: FormData) {
 
 export default async function PlayersPage() {
   const salon = await currentSalon();
+  const { admin, playerId } = await getSession();
   const players = await db.salonPlayer.findMany({
     where: { salonId: salon.id },
     include: { player: true, eloHistory: { orderBy: { createdAt: "desc" }, take: 1 } },
@@ -28,15 +31,15 @@ export default async function PlayersPage() {
   });
   return (
     <div className="space-y-6">
-      <h1>Oyuncular ve ELO sıralaması</h1>
-      <form action={addPlayer} className="card space-y-4">
+      <h1>{admin ? "Oyuncular ve ELO sıralaması" : "Puan durumu"}</h1>
+      {admin && <form action={addPlayer} className="card space-y-4">
         <div className="flex flex-wrap gap-3">
           <div><label className="label">Ad soyad</label><input name="name" required className="input" /></div>
           <div><label className="label">E-posta (giriş için)</label><input name="email" type="email" className="input" /></div>
         </div>
         <LevelPicker levels={LEVELS} />
         <button className="btn btn-accent">Oyuncu ekle</button>
-      </form>
+      </form>}
       <TierLegend />
       <section className="card p-0">
         <ol className="divide-y divide-zinc-100">
@@ -44,7 +47,7 @@ export default async function PlayersPage() {
             <li key={p.id}>
               <Link
                 href={`/oyuncular/${p.id}`}
-                className={`flex items-center gap-3 px-4 py-3 transition hover:bg-court-50 ${i < 3 ? "bg-gradient-to-r from-ball-50 to-transparent" : ""}`}
+                className={`flex items-center gap-3 px-4 py-3 transition hover:bg-court-50 ${p.id === playerId ? "bg-court-50 ring-2 ring-court-600 ring-inset" : i < 3 ? "bg-gradient-to-r from-ball-50 to-transparent" : ""}`}
               >
                 <span className={`w-7 text-center font-display text-lg font-bold ${i < 3 ? "text-ball-600" : "text-zinc-400"}`}>
                   {["🥇", "🥈", "🥉"][i] ?? i + 1}
@@ -54,6 +57,7 @@ export default async function PlayersPage() {
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium">{p.player.name}</span>
                     <TierBadge elo={p.elo} />
+                    {p.id === playerId && <span className="rounded-full bg-court-700 px-2 text-[10px] font-semibold text-white uppercase">sen</span>}
                   </div>
                   <div className="text-xs text-zinc-500">
                     {p.matchesCount} maç

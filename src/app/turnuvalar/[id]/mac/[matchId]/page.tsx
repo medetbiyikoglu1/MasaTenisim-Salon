@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ErrorNote } from "@/components/ErrorNote";
@@ -12,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 async function save(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   const matchId = String(formData.get("matchId"));
   const rows: [string, string][] = [];
@@ -40,6 +42,7 @@ async function save(formData: FormData) {
 
 async function walkover(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   const matchId = String(formData.get("matchId"));
   try {

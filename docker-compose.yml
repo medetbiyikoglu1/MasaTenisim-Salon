@@ -18,6 +18,8 @@ services:
       - db
     environment:
       DATABASE_URL: postgresql://masa:${POSTGRES_PASSWORD:-masa}@db:5432/masatenisi
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD}
+      AUTH_SECRET: ${AUTH_SECRET}
     ports:
       - "3000:3000"
     profiles: ["prod"]

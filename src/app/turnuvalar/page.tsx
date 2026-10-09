@@ -1,12 +1,14 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { StatusBadge } from "@/components/ui";
+import { getSession } from "@/lib/auth/session";
 import { currentSalon } from "@/lib/salon";
 
 export const dynamic = "force-dynamic";
 
 export default async function TournamentsPage() {
   const salon = await currentSalon();
+  const { admin } = await getSession();
   const tournaments = await db.tournament.findMany({
     where: { salonId: salon.id },
     include: { _count: { select: { participants: true } } },
@@ -16,7 +18,7 @@ export default async function TournamentsPage() {
     <div className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <h1 className="mb-0">Turnuvalar</h1>
-        <Link href="/turnuvalar/yeni" className="btn btn-accent">+ Yeni turnuva</Link>
+        {admin && <Link href="/turnuvalar/yeni" className="btn btn-accent">+ Yeni turnuva</Link>}
       </div>
       {tournaments.length === 0 && <p className="card text-sm text-zinc-600">Henüz turnuva yok.</p>}
       <ul className="grid gap-3 sm:grid-cols-2">

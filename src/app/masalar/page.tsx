@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { currentSalon } from "@/lib/salon";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 async function addTable() {
   "use server";
+  await requireAdmin();
   const salon = await currentSalon();
   const last = await db.table.findFirst({ where: { salonId: salon.id }, orderBy: { number: "desc" } });
   await db.table.create({ data: { salonId: salon.id, number: (last?.number ?? 0) + 1 } });
@@ -17,6 +19,7 @@ async function addTable() {
 
 async function toggleTable(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   const table = await db.table.findUniqueOrThrow({ where: { id } });
   await db.table.update({ where: { id }, data: { active: !table.active } });
@@ -25,6 +28,7 @@ async function toggleTable(formData: FormData) {
 
 async function savePrices(formData: FormData) {
   "use server";
+  await requireAdmin();
   const salon = await currentSalon();
   for (const dayType of ["WEEKDAY", "WEEKEND"] as const) {
     const rate = Number(formData.get(dayType));

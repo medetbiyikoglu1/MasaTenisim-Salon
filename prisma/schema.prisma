@@ -109,6 +109,8 @@ model SalonPlayer {
   player       Player        @relation(fields: [playerId], references: [id], onDelete: Cascade)
   elo          Int           @default(1500)
   matchesCount Int           @default(0)
+  /// Oyuncunun kişisel giriş bağlantısındaki anahtarın SHA-256 özeti (anahtarın kendisi saklanmaz)
+  accessTokenHash String?    @unique
   participants Participant[]
   eloHistory   EloHistory[]
 

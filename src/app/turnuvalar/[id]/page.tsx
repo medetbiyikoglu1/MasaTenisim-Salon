@@ -1,4 +1,6 @@
 import type { Prisma } from "@prisma/client";
+import { getSession, requireAdmin } from "@/lib/auth/session";
+import { changeEntry } from "@/app/oyuncu/actions";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { ErrorNote } from "@/components/ErrorNote";
@@ -33,12 +35,14 @@ async function run(id: string, fn: () => Promise<unknown>) {
 
 async function addExisting(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   await run(id, () => addParticipants(id, formData.getAll("players").map(String)));
 }
 
 async function addNew(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   const name = String(formData.get("name") ?? "").trim();
   await run(id, async () => {
@@ -51,18 +55,21 @@ async function addNew(formData: FormData) {
 
 async function remove(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   await run(id, () => removeParticipant(id, String(formData.get("participantId"))));
 }
 
 async function start(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   await run(id, () => startTournament(id));
 }
 
 async function finishGroups(formData: FormData) {
   "use server";
+  await requireAdmin();
   const id = String(formData.get("id"));
   await run(id, () => finishGroupStage(id));
 }
@@ -72,10 +79,10 @@ export default async function TournamentPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ hata?: string }>;
+  searchParams: Promise<{ hata?: string; tamam?: string }>;
 }) {
   const { id } = await params;
-  const { hata } = await searchParams;
+  const { hata, tamam } = await searchParams;
   const t = await db.tournament.findUnique({
     where: { id },
     include: {
@@ -94,13 +101,17 @@ export default async function TournamentPage({
     },
   });
   if (!t) notFound();
-  if (t.status === "DRAFT") return <DraftTournament t={t} hata={hata} />;
+  const { admin, playerId } = await getSession();
+  if (t.status === "DRAFT") {
+    return admin ? <DraftTournament t={t} hata={hata} /> : <PlayerDraftView t={t} playerId={playerId} hata={hata} tamam={tamam} />;
+  }
   const names = new Map(
     t.groups.flatMap((g) => g.participants.map((p) => [p.salonPlayerId, p.salonPlayer.player.name] as const)),
   );
   const groupMatches = t.groups.flatMap((g) => g.matches);
   const left = groupMatches.filter((m) => m.status !== "DONE").length;
   const editable = (m: { round: string; playerAId: string | null; playerBId: string | null }) =>
+    admin &&
     !!m.playerAId && !!m.playerBId && (m.round === "GROUP" ? t.status === "GROUPS" : t.status === "KNOCKOUT");
   const board = (m: (typeof groupMatches)[number]) => {
     const side = (pid: string | null) =>
@@ -195,7 +206,7 @@ export default async function TournamentPage({
         </section>
       )}
 
-      {t.status === "GROUPS" && (
+      {admin && t.status === "GROUPS" && (
         <form action={finishGroups} className="card flex flex-wrap items-center gap-4">
           <input type="hidden" name="id" value={t.id} />
           <div className="min-w-48 flex-1">
@@ -359,6 +370,53 @@ type DraftProps = {
     };
   }>;
 };
+
+/** Oyuncunun gördüğü kayıt aşaması: katılımcılar ve kendi katıl/çekil butonu. */
+function PlayerDraftView({ t, playerId, hata, tamam }: DraftProps & { playerId: string | null; tamam?: string }) {
+  const tables = [...new Map(t.blocks.map((b) => [b.tableId, b.table.number])).values()];
+  const joined = !!playerId && t.participants.some((p) => p.salonPlayerId === playerId);
+  return (
+    <div className="space-y-6">
+      <Hero
+        t={t}
+        facts={[`Masa ${tables.join(", ")}`, ...(t.entryFee ? [`katılım ${t.entryFee.toString()} ₺`] : [])]}
+      />
+      <ErrorNote message={hata} />
+      {tamam && <p className="rounded-md border border-court-600/30 bg-court-50 px-3 py-2 text-sm text-court-800">{tamam}</p>}
+      {playerId && (
+        <form action={changeEntry} className="card flex flex-wrap items-center justify-between gap-3">
+          <input type="hidden" name="tournamentId" value={t.id} />
+          <input type="hidden" name="islem" value={joined ? "cekil" : "katil"} />
+          <input type="hidden" name="geri" value={`/turnuvalar/${t.id}`} />
+          <p className="text-sm text-zinc-700">
+            {joined ? "✓ Bu turnuvaya katılıyorsun. Turnuva başlayana kadar katılımını geri çekebilirsin." : "Kayıtlar açık. Katılmak ister misin?"}
+          </p>
+          <button className={joined ? "btn btn-ghost" : "btn btn-accent"}>{joined ? "Katılımı geri çek" : "Katıl"}</button>
+        </form>
+      )}
+      <section className="card">
+        <h2>Katılımcılar ({t.participants.length})</h2>
+        {t.participants.length === 0 ? (
+          <p className="text-sm text-zinc-600">Henüz katılımcı yok. İlk sen ol!</p>
+        ) : (
+          <ul className="grid gap-2 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {t.participants.map((p) => (
+              <li
+                key={p.id}
+                className={`flex items-center gap-2.5 rounded-lg border px-3 py-2 ${p.salonPlayerId === playerId ? "border-court-600 bg-court-50" : "border-zinc-200"}`}
+              >
+                <Avatar name={p.salonPlayer.player.name} />
+                <span className="min-w-0 flex-1 truncate font-medium">{p.salonPlayer.player.name}</span>
+                <TierBadge elo={p.salonPlayer.elo} compact />
+                <span className="tabular-nums text-zinc-400">{p.salonPlayer.elo}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
 
 /** Turnuva başlamadan önce: katılımcı listesi, ekleme/çıkarma ve başlatma. */
 async function DraftTournament({ t, hata }: DraftProps) {

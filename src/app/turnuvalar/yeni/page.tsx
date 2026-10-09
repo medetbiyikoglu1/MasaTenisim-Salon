@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { requireAdmin } from "@/lib/auth/session";
 import { db } from "@/lib/db";
 import { nextFriday } from "@/lib/rental";
 import { currentSalon } from "@/lib/salon";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 async function create(formData: FormData) {
   "use server";
+  await requireAdmin();
   const salon = await currentSalon();
   const date = String(formData.get("date"));
   const fee = String(formData.get("entryFee") ?? "").trim();

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { ErrorNote } from "@/components/ErrorNote";
@@ -20,6 +21,7 @@ function localInput(d: Date): string {
 
 async function save(formData: FormData) {
   "use server";
+  await requireAdmin();
   const salon = await currentSalon();
   const matchId = String(formData.get("matchId") ?? "") || undefined;
   const values: FormValues = {
@@ -56,6 +58,7 @@ async function save(formData: FormData) {
 
 async function remove(formData: FormData) {
   "use server";
+  await requireAdmin();
   const salon = await currentSalon();
   try {
     await deleteIndividualMatch(salon.id, String(formData.get("matchId")));

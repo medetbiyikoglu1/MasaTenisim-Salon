@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requireAdmin } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
 import { ErrorNote } from "@/components/ErrorNote";
@@ -14,6 +15,7 @@ const back = (tableId: string, week: string, extra: Record<string, string> = {})
 
 async function rent(formData: FormData) {
   "use server";
+  await requireAdmin();
   const tableId = String(formData.get("tableId"));
   const week = String(formData.get("week"));
   const date = String(formData.get("date"));
@@ -39,6 +41,7 @@ async function rent(formData: FormData) {
 
 async function cancel(formData: FormData) {
   "use server";
+  await requireAdmin();
   const tableId = String(formData.get("tableId"));
   const week = String(formData.get("week"));
   await cancelRental(String(formData.get("rentalId")));

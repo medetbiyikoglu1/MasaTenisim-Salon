@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-const NAV = [
+export type NavItem = { href: string; label: string };
+
+export const ADMIN_NAV: NavItem[] = [
   { href: "/", label: "Özet" },
   { href: "/turnuvalar", label: "Turnuvalar" },
   { href: "/maclar", label: "Maçlar" },
@@ -11,8 +13,15 @@ const NAV = [
   { href: "/masalar", label: "Masalar" },
 ];
 
-export function Nav() {
+export const PLAYER_NAV: NavItem[] = [
+  { href: "/oyuncu", label: "Özetim" },
+  { href: "/turnuvalar", label: "Turnuvalar" },
+  { href: "/oyuncular", label: "Puan durumu" },
+];
+
+export function Nav({ items, showLogout }: { items: NavItem[]; showLogout: boolean }) {
   const path = usePathname();
+  const NAV = items;
   return (
     <div className="flex flex-wrap gap-1">
       {NAV.map((n) => {
@@ -29,6 +38,11 @@ export function Nav() {
           </Link>
         );
       })}
+      {showLogout && (
+        <a href="/cikis" className="rounded-md px-3 py-1.5 text-sm font-medium text-court-100/60 transition hover:bg-white/10 hover:text-white">
+          Çıkış
+        </a>
+      )}
     </div>
   );
 }
