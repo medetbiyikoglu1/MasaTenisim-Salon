@@ -21,6 +21,7 @@ Testler: `npm test`
 
 - **Salon sahibi:** `/giris` sayfasından `.env` içindeki `ADMIN_PASSWORD` ile girer. Yönetim sayfaları ve tüm yönetim işlemleri şifre ister.
 - **Oyuncu:** Salon sahibi, oyuncu profilinde "Oyuncu bağlantısı" kartından kişisel bir bağlantı oluşturup oyuncuya gönderir (WhatsApp butonu var). Oyuncu bağlantıyı bir kez açınca `/oyuncu` sayfasına girer: özetini ve maç geçmişini görür, puan durumunu ve turnuvaları inceler, kayıt açık turnuvalara katılır ya da çekilir. Turnuva oluşturamaz, sonuç giremez. Yeni bağlantı oluşturulunca eskisi geçersiz olur.
+- **Misafir:** Üye olmadan turnuvalara, turnuva tablolarına ve puan durumuna göz atar. Turnuvaya katılmak için üye girişi (kişisel bağlantı) gerekir; kayıt açık turnuvada "Üye girişi" butonu görür.
 - **Salon ekranı** (`/tv/<turnuva>`) girişsiz açılır.
 - `AUTH_SECRET` oturum çerezlerini imzalar; değiştirilirse herkesin oturumu kapanır.
 

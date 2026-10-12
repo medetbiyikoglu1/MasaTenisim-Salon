@@ -17,7 +17,7 @@ export async function middleware(req: NextRequest) {
 
   const access = accessFor(req.nextUrl.pathname, req.method, role);
   if (access === "allow") return NextResponse.next();
-  const target = access === "player-home" ? "/oyuncu" : "/giris";
+  const target = access === "player-home" ? "/oyuncu" : access === "guest-home" ? "/turnuvalar" : "/giris";
   const url = new URL(target, req.url);
   if (access === "login" && req.method === "GET") url.searchParams.set("sonra", req.nextUrl.pathname);
   return NextResponse.redirect(url, 303);
