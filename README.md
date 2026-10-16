@@ -17,6 +17,18 @@ npm run dev                    # http://localhost:3000
 
 Testler: `npm test`
 
+## Yerel canlı provası
+
+Canlıya almadan önce, gerçek veriye dokunmadan uygulamayı canlıdaki gibi derlenmiş haliyle denemek için:
+
+```bash
+npm run prova:hazirla   # ayrı "masatenisi_prova" veritabanını kurar ve demo verisini yükler
+npm run prova           # üretim derlemesi yapar, http://localhost:3002 adresinde başlatır
+npm run prova:kontrol   # (ikinci terminalde) 27 sayfa/yetki kontrolünü çalıştırır
+```
+
+Demo verisinde 18 oyuncu, bitmiş teselli turnuvalı bir cuma turnuvası (bir maç hükmen), grup aşamasında süren bir turnuva, kaydı açık bir turnuva, bireysel maçlar ve kiralamalar bulunur. `prova:hazirla` sonunda üç oyuncunun kişisel giriş bağlantısını ve salon ekranı adresini yazar. Komut her çalıştığında prova veritabanını sıfırdan doldurur; demo betiği yalnızca adı "prova" içeren veritabanına yazar.
+
 ## Giriş
 
 - **Salon sahibi:** `/giris` sayfasından `.env` içindeki `ADMIN_PASSWORD` ile girer. Yönetim sayfaları ve tüm yönetim işlemleri şifre ister.

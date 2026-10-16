@@ -9,7 +9,10 @@
     "lint": "eslint",
     "test": "vitest run",
     "db:migrate": "prisma migrate dev",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "prova:hazirla": "bash scripts/prova.sh hazirla",
+    "prova": "bash scripts/prova.sh baslat",
+    "prova:kontrol": "bash scripts/prova.sh kontrol"
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",

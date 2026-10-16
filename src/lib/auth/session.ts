@@ -16,7 +16,8 @@ export function authSecret(): string {
 const cookieOptions = (maxAge: number) => ({
   httpOnly: true,
   sameSite: "lax" as const,
-  secure: process.env.NODE_ENV === "production",
+  // Canlıda yalnızca HTTPS; yerel provada (http://localhost) COOKIE_SECURE=false ile kapatılır
+  secure: process.env.NODE_ENV === "production" && process.env.COOKIE_SECURE !== "false",
   path: "/",
   maxAge,
 });

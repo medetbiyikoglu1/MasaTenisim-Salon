@@ -1,6 +1,7 @@
 "use server";
 
 import { headers } from "next/headers";
+import { publicOrigin } from "@/lib/auth/public-url";
 import { createPlayerToken, requireAdmin } from "@/lib/auth/session";
 
 export type LinkState = { url: string } | null;
@@ -9,8 +10,5 @@ export type LinkState = { url: string } | null;
 export async function createPlayerLink(_prev: LinkState, formData: FormData): Promise<LinkState> {
   await requireAdmin();
   const token = await createPlayerToken(String(formData.get("playerId")));
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host") ?? "localhost:3000";
-  const proto = h.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https");
-  return { url: `${proto}://${host}/oyuncu/giris/${token}` };
+  return { url: `${publicOrigin(await headers())}/oyuncu/giris/${token}` };
 }

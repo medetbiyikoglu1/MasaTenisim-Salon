@@ -50,3 +50,20 @@ describe("erişim kuralları", () => {
     expect(accessFor("/masalar/x", "GET", "admin")).toBe("allow");
   });
 });
+
+describe("dış adres", () => {
+  it("tünel arkasında iç adres yerine dış adresi kullanır", async () => {
+    const { publicUrl } = await import("./public-url");
+    const req = new Request("https://localhost:3002/oyuncu/giris/x", {
+      headers: { host: "deneme.trycloudflare.com", "x-forwarded-proto": "https" },
+    });
+    expect(publicUrl(req, "/oyuncu").href).toBe("https://deneme.trycloudflare.com/oyuncu");
+  });
+
+  it("vekil yoksa kendi adresini kullanır", async () => {
+    const { publicUrl } = await import("./public-url");
+    expect(publicUrl(new Request("http://localhost:3001/cikis", { headers: { host: "localhost:3001" } }), "/giris").href).toBe(
+      "http://localhost:3001/giris",
+    );
+  });
+});

@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-prova/
 /out/
 
 # production
@@ -41,3 +42,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+
+# yerel sunucu logları
+/dev.log
+/prova.log
+/tunel.log
+/prova-linkler.txt
