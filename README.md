@@ -41,6 +41,6 @@ Uygulama 3000 portunda açılır; önüne HTTPS için Caddy veya Nginx konmalıd
 
 ## Durum
 
-Hazır: proje iskeleti, veri modeli, oyuncu ve masa yönetimi, hafta içi / hafta sonu ücreti, turnuva oluşturma (ELO'ya göre gruplar, her gruba masa, grup maçları, masaların kiralamaya kapatılması).
+Hazır: proje iskeleti, veri modeli, oyuncu ve masa yönetimi, hafta içi / hafta sonu ücreti, turnuva oluşturma (ELO'ya göre gruplar, seri başları ayrı gruplarda, maçlar oluşmadan önce grupların onayı ve elle düzenlenmesi, her gruba masa, grup maçları, masaların kiralamaya kapatılması).
 
 Sırada: e-posta ile giriş, turnuva günü ekranı (otomatik masa ataması, skor girişi ve onay), eleme tablosu ve ELO güncellemesi, TV ekranı, kiralama takvimi.

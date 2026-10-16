@@ -13,6 +13,7 @@ import {
   roundRobin,
   seedOrder,
   snakeGroups,
+  groupProblem,
   type QueueMatch,
   validateMatchSets,
 } from "./index";
@@ -55,6 +56,19 @@ describe("gruplar", () => {
     expect(groups.map((g) => g.length)).toEqual([4, 4, 4, 4, 4]);
     expect(groups[0].map((p) => p.id)).toEqual(["p1", "p10", "p11", "p20"]);
     expect(groups[4].map((p) => p.id)).toEqual(["p5", "p6", "p15", "p16"]);
+  });
+
+  it("seri başları (en yüksek ELO'lu grup sayısı kadar oyuncu) her biri ayrı bir grupta", () => {
+    const groups = snakeGroups(players(14), 4);
+    const seeds = ["p1", "p2", "p3", "p4"];
+    expect(groups.map((g) => g.filter((p) => seeds.includes(p.id)).length)).toEqual([1, 1, 1, 1]);
+    expect(groups.map((g) => g[0].id)).toEqual(seeds);
+  });
+
+  it("onay öncesi grup kontrolü: atanmamış oyuncu ve 2'den küçük grup", () => {
+    expect(groupProblem([{ name: "A", size: 3 }, { name: "B", size: 2 }], 0)).toBeNull();
+    expect(groupProblem([{ name: "A", size: 4 }, { name: "B", size: 1 }], 0)).toContain("Grup B");
+    expect(groupProblem([{ name: "A", size: 3 }], 1)).toContain("atanmamış");
   });
 
   it("4 kişilik grupta 3 tur, 6 maç; herkes herkesle bir kez oynar", () => {
