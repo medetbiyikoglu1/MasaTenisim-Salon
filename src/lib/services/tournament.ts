@@ -7,6 +7,7 @@ import {
   firstKnockoutRound,
   splitByStanding,
   type Bracket,
+  groupProblem,
   groupStandings,
   knockoutSeeding,
   nextKnockoutSlot,
@@ -94,32 +95,30 @@ export async function removeParticipant(tournamentId: string, participantId: str
 }
 
 /**
- * Turnuvayı başlatır: katılımcıları ELO'ya göre yılan dizilimle gruplara böler,
- * her gruba sırayla turnuva masalarından birini verir ve grup maçlarını üretir.
+ * Grupları kurar ama turnuvayı başlatmaz: katılımcılar ELO'ya göre yılan
+ * dizilimle gruplara bölünür, seri başları (en yüksek ELO'lu oyuncular) her biri
+ * ayrı bir gruba düşer. Her gruba sırayla turnuva masalarından biri verilir.
+ * Salon sahibi grupları onaylayana kadar oyuncuların grubunu değiştirebilir;
+ * maçlar onaydan sonra (`startTournament`) oluşur. Tekrar çağrılırsa gruplar
+ * baştan kurulur.
  */
-export async function startTournament(tournamentId: string, groupCount?: number) {
+export async function proposeGroups(tournamentId: string, groupCount?: number) {
   await draftTournament(tournamentId);
   const [participants, blocks] = await Promise.all([
     db.participant.findMany({ where: { tournamentId }, include: { salonPlayer: true } }),
     db.tableBlock.findMany({ where: { tournamentId }, include: { table: true }, orderBy: { table: { number: "asc" } } }),
   ]);
   if (participants.length < MIN_PARTICIPANTS) {
-    throw new TournamentError(`Başlatmak için en az ${MIN_PARTICIPANTS} katılımcı gerekli (şu an ${participants.length})`);
+    throw new TournamentError(`Grupları kurmak için en az ${MIN_PARTICIPANTS} katılımcı gerekli (şu an ${participants.length})`);
   }
   const tableIds = [...new Set(blocks.map((b) => b.tableId))];
   if (tableIds.length < 1) throw new TournamentError("Turnuvaya masa atanmamış");
 
   const players = participants.map((p) => p.salonPlayer);
   const groups = snakeGroups(players, groupCount ?? defaultGroupCount(players.length));
-  const plan = planGroupStage(groups);
-  const seedOf = new Map([...players].sort((a, b) => b.elo - a.elo).map((p, i) => [p.id, i + 1]));
 
-  return db.$transaction(async (tx) => {
-    // Aynı anda iki kez başlatılmasın
-    const { count } = await tx.tournament.updateMany({ where: { id: tournamentId, status: "DRAFT" }, data: { status: "GROUPS" } });
-    if (count === 0) throw new TournamentError("Turnuva zaten başlatılmış");
-
-    const groupIds: string[] = [];
+  await db.$transaction(async (tx) => {
+    await clearGroups(tx, tournamentId);
     for (const [gi, members] of groups.entries()) {
       const group = await tx.group.create({
         data: {
@@ -128,19 +127,74 @@ export async function startTournament(tournamentId: string, groupCount?: number)
           tableId: tableIds[gi % tableIds.length],
         },
       });
-      groupIds.push(group.id);
-      for (const p of members) {
-        await tx.participant.update({
-          where: { tournamentId_salonPlayerId: { tournamentId, salonPlayerId: p.id } },
-          data: { groupId: group.id, seed: seedOf.get(p.id) },
-        });
-      }
+      await tx.participant.updateMany({
+        where: { tournamentId, salonPlayerId: { in: members.map((p) => p.id) } },
+        data: { groupId: group.id },
+      });
     }
+  });
+}
 
+async function clearGroups(tx: Prisma.TransactionClient, tournamentId: string) {
+  await tx.participant.updateMany({ where: { tournamentId }, data: { groupId: null } });
+  await tx.group.deleteMany({ where: { tournamentId } });
+}
+
+/** Kurulan grupları siler; turnuva kayıt aşamasına döner. */
+export async function cancelProposedGroups(tournamentId: string) {
+  await draftTournament(tournamentId);
+  await db.$transaction((tx) => clearGroups(tx, tournamentId));
+}
+
+/** Onaydan önce oyuncuların gruplarını değiştirir: katılımcı id → grup id. */
+export async function saveGroupAssignments(tournamentId: string, assignments: Map<string, string>) {
+  await draftTournament(tournamentId);
+  const groupIds = new Set((await db.group.findMany({ where: { tournamentId }, select: { id: true } })).map((g) => g.id));
+  if (groupIds.size === 0) throw new TournamentError("Önce grupları kur");
+  await db.$transaction(async (tx) => {
+    for (const [participantId, groupId] of assignments) {
+      if (!groupIds.has(groupId)) throw new TournamentError("Geçersiz grup seçimi");
+      await tx.participant.updateMany({ where: { id: participantId, tournamentId }, data: { groupId } });
+    }
+  });
+}
+
+/**
+ * Onaylanan gruplarla turnuvayı başlatır: seri numaraları ELO'ya göre verilir,
+ * grup maçları üretilir ve katılımcı listesi kilitlenir.
+ */
+export async function startTournament(tournamentId: string) {
+  await draftTournament(tournamentId);
+
+  return db.$transaction(async (tx) => {
+    // Aynı anda iki kez başlatılmasın
+    const { count } = await tx.tournament.updateMany({ where: { id: tournamentId, status: "DRAFT" }, data: { status: "GROUPS" } });
+    if (count === 0) throw new TournamentError("Turnuva zaten başlatılmış");
+
+    const [groups, participants] = await Promise.all([
+      tx.group.findMany({ where: { tournamentId }, orderBy: { name: "asc" } }),
+      tx.participant.findMany({ where: { tournamentId }, include: { salonPlayer: true } }),
+    ]);
+    if (groups.length === 0) throw new TournamentError("Önce grupları kur ve onayla");
+    if (participants.length < MIN_PARTICIPANTS) {
+      throw new TournamentError(`Başlatmak için en az ${MIN_PARTICIPANTS} katılımcı gerekli (şu an ${participants.length})`);
+    }
+    const sorted = [...participants].sort((a, b) => b.salonPlayer.elo - a.salonPlayer.elo);
+    const members = groups.map((g) => sorted.filter((p) => p.groupId === g.id));
+    const problem = groupProblem(
+      groups.map((g, gi) => ({ name: g.name, size: members[gi].length })),
+      participants.filter((p) => !p.groupId).length,
+    );
+    if (problem) throw new TournamentError(problem);
+
+    for (const [i, p] of sorted.entries()) {
+      await tx.participant.update({ where: { id: p.id }, data: { seed: i + 1 } });
+    }
+    const plan = planGroupStage(members.map((ps) => ps.map((p) => ({ id: p.salonPlayerId }))));
     await tx.match.createMany({
       data: plan.map((m) => ({
         tournamentId,
-        groupId: m.groupIndex === null ? null : groupIds[m.groupIndex],
+        groupId: m.groupIndex === null ? null : groups[m.groupIndex].id,
         round: m.round,
         order: m.order,
         playerAId: m.playerAId,

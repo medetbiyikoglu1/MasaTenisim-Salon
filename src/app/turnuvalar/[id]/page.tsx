@@ -14,7 +14,10 @@ import {
   TournamentError,
   addParticipants,
   removeParticipant,
+  cancelProposedGroups,
   finishGroupStage,
+  proposeGroups,
+  saveGroupAssignments,
   startTournament,
 } from "@/lib/services/tournament";
 import { ROUND_LABELS, groupStandings, roundSize, type SetScore } from "@/lib/tournament";
@@ -60,11 +63,43 @@ async function remove(formData: FormData) {
   await run(id, () => removeParticipant(id, String(formData.get("participantId"))));
 }
 
-async function start(formData: FormData) {
+async function makeGroups(formData: FormData) {
   "use server";
   await requireAdmin();
   const id = String(formData.get("id"));
-  await run(id, () => startTournament(id));
+  await run(id, () => proposeGroups(id));
+}
+
+async function cancelGroups(formData: FormData) {
+  "use server";
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  await run(id, () => cancelProposedGroups(id));
+}
+
+/** Onay ekranında seçilen grupları kaydeder; `start` ise ardından turnuvayı başlatıp maçları oluşturur. */
+async function applyGroups(formData: FormData, start: boolean) {
+  const id = String(formData.get("id"));
+  const assignments = new Map<string, string>();
+  for (const [key, value] of formData.entries()) {
+    if (key.startsWith("grup:") && value) assignments.set(key.slice("grup:".length), String(value));
+  }
+  await run(id, async () => {
+    await saveGroupAssignments(id, assignments);
+    if (start) await startTournament(id);
+  });
+}
+
+async function saveGroups(formData: FormData) {
+  "use server";
+  await requireAdmin();
+  await applyGroups(formData, false);
+}
+
+async function approveGroups(formData: FormData) {
+  "use server";
+  await requireAdmin();
+  await applyGroups(formData, true);
 }
 
 async function finishGroups(formData: FormData) {
@@ -367,6 +402,7 @@ type DraftProps = {
       prizes: true;
       blocks: { include: { table: true } };
       participants: { include: { salonPlayer: { include: { player: true } } } };
+      groups: { include: { table: true } };
     };
   }>;
 };
@@ -420,6 +456,7 @@ function PlayerDraftView({ t, playerId, hata, tamam }: DraftProps & { playerId: 
 
 /** Turnuva başlamadan önce: katılımcı listesi, ekleme/çıkarma ve başlatma. */
 async function DraftTournament({ t, hata }: DraftProps) {
+  if (t.groups.length > 0) return <GroupReview t={t} hata={hata} />;
   const inTournament = new Set(t.participants.map((p) => p.salonPlayerId));
   const others = (
     await db.salonPlayer.findMany({ where: { salonId: t.salonId }, include: { player: true }, orderBy: { elo: "desc" } })
@@ -438,16 +475,16 @@ async function DraftTournament({ t, hata }: DraftProps) {
       <section className="card">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <h2 className="mb-0">Katılımcılar ({t.participants.length})</h2>
-          <form action={start}>
+          <form action={makeGroups}>
             <input type="hidden" name="id" value={t.id} />
             <button className="btn btn-accent disabled:cursor-not-allowed disabled:opacity-40" disabled={!enough}>
-              Turnuvayı başlat
+              Grupları kur
             </button>
           </form>
         </div>
         <p className="mb-3 text-xs text-zinc-500">
           {enough
-            ? "Başlattığında gruplar ELO'ya göre dengeli kurulur, maçlar oluşur ve katılımcı listesi kilitlenir."
+            ? "Gruplar ELO'ya göre dengeli kurulur; en yüksek ELO'lu oyuncular (seri başları) her biri ayrı bir gruba düşer. Maçlar oluşmadan önce grupları görüp değiştirebilirsin."
             : `Başlatmak için en az ${MIN_PARTICIPANTS} katılımcı gerekli.`}
         </p>
         {t.participants.length === 0 ? (
@@ -498,6 +535,106 @@ async function DraftTournament({ t, hata }: DraftProps) {
           <button className="btn btn-ghost">Seçilenleri ekle</button>
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * Grupların son onayı: seri başları ayrı gruplarda gelir, salon sahibi her
+ * oyuncunun grubunu değiştirebilir. Maçlar yalnızca onaydan sonra oluşur.
+ */
+function GroupReview({ t, hata }: DraftProps) {
+  const ranked = [...t.participants].sort((a, b) => b.salonPlayer.elo - a.salonPlayer.elo);
+  // Seri başı: grup sayısı kadar en yüksek ELO'lu oyuncu
+  const seedOf = new Map(ranked.slice(0, t.groups.length).map((p, i) => [p.id, i + 1]));
+  const groups = [...t.groups].sort((a, b) => a.name.localeCompare(b.name));
+  const unassigned = ranked.filter((p) => !p.groupId);
+  const tables = [...new Map(t.blocks.map((b) => [b.tableId, b.table.number])).values()];
+
+  const row = (p: (typeof ranked)[number]) => (
+    <li key={p.id} className="flex items-center gap-2.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm">
+      <Avatar name={p.salonPlayer.player.name} size="sm" />
+      <span className="min-w-0 flex-1 truncate font-medium">{p.salonPlayer.player.name}</span>
+      {seedOf.has(p.id) && (
+        <span className="rounded-full bg-ball-500 px-1.5 text-[10px] font-semibold tracking-wide text-white uppercase">
+          {seedOf.get(p.id)}. seri başı
+        </span>
+      )}
+      <TierBadge elo={p.salonPlayer.elo} compact />
+      <span className="tabular-nums text-zinc-400">{p.salonPlayer.elo}</span>
+      <select name={`grup:${p.id}`} defaultValue={p.groupId ?? ""} aria-label={`${p.salonPlayer.player.name} grubu`} className="input w-auto py-1 text-xs">
+        {!p.groupId && <option value="">Grup seç</option>}
+        {groups.map((g) => (
+          <option key={g.id} value={g.id}>Grup {g.name}</option>
+        ))}
+      </select>
+    </li>
+  );
+
+  return (
+    <div className="space-y-6">
+      <Hero t={t} facts={[`Masa ${tables.join(", ")}`, `${t.participants.length} oyuncu`, `${groups.length} grup`]} />
+      <ErrorNote message={hata} />
+
+      <form action={approveGroups} className="space-y-5">
+        <input type="hidden" name="id" value={t.id} />
+        <section className="card">
+          <h2>Grupları onayla</h2>
+          <p className="text-sm text-zinc-600">
+            Seri başları (en yüksek ELO&apos;lu {groups.length} oyuncu) her biri ayrı bir gruba yerleştirildi. Bir oyuncunun grubunu
+            değiştirmek için yanındaki listeden yeni grubunu seç. Maçlar sen onaylayınca oluşur ve katılımcı listesi kilitlenir.
+          </p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button className="btn btn-accent">Onayla ve maçları oluştur</button>
+            <button formAction={saveGroups} className="btn btn-ghost">Değişiklikleri kaydet</button>
+          </div>
+        </section>
+
+        {unassigned.length > 0 && (
+          <section className="card border-amber-300">
+            <h2>Gruba atanmamış ({unassigned.length})</h2>
+            <p className="-mt-2 mb-3 text-sm text-zinc-500">Gruplar kurulduktan sonra katılan oyuncular. Her birine bir grup seç.</p>
+            <ul className="grid gap-2">{unassigned.map(row)}</ul>
+          </section>
+        )}
+
+        <div className="grid gap-5 lg:grid-cols-2">
+          {groups.map((g) => {
+            const members = ranked.filter((p) => p.groupId === g.id);
+            const seeds = members.filter((p) => seedOf.has(p.id)).length;
+            return (
+              <section key={g.id} className="card p-0">
+                <div className="flex items-center justify-between rounded-t-xl bg-court-800 px-5 py-3 text-white">
+                  <h2 className="mb-0 text-white">Grup {g.name}</h2>
+                  <span className="rounded-full bg-white/15 px-2.5 py-0.5 text-xs font-medium">
+                    {members.length} oyuncu · Masa {g.table?.number ?? "-"}
+                  </span>
+                </div>
+                <div className="space-y-2 p-5">
+                  {seeds > 1 && (
+                    <p className="rounded-md bg-amber-50 px-3 py-1.5 text-xs text-amber-800">Bu grupta {seeds} seri başı var.</p>
+                  )}
+                  {members.length < 2 && (
+                    <p className="rounded-md bg-red-50 px-3 py-1.5 text-xs text-red-700">Grupta en az 2 oyuncu olmalı.</p>
+                  )}
+                  <ul className="grid gap-2">{members.map(row)}</ul>
+                </div>
+              </section>
+            );
+          })}
+        </div>
+      </form>
+
+      <div className="flex flex-wrap gap-2">
+        <form action={makeGroups}>
+          <input type="hidden" name="id" value={t.id} />
+          <button className="btn btn-ghost">Grupları baştan kur</button>
+        </form>
+        <form action={cancelGroups}>
+          <input type="hidden" name="id" value={t.id} />
+          <button className="btn btn-ghost">Kayda geri dön</button>
+        </form>
+      </div>
     </div>
   );
 }

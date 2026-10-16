@@ -10,7 +10,11 @@ export function defaultGroupCount(playerCount: number): number {
   return Math.max(2, Math.round(playerCount / 4));
 }
 
-/** ELO'ya göre yılan (snake) dizilim: 1. tur A→E, 2. tur E→A ... */
+/**
+ * ELO'ya göre yılan (snake) dizilim: 1. tur A→E, 2. tur E→A ...
+ * İlk tur seri başlarıdır: en yüksek ELO'lu `groupCount` oyuncu her biri ayrı
+ * bir gruba düşer (1. seri başı A'ya, 2. seri başı B'ye ...).
+ */
 export function snakeGroups<T extends PlayerRef>(players: T[], groupCount: number): T[][] {
   if (groupCount < 1) throw new Error("Grup sayısı en az 1 olmalı");
   const sorted = [...players].sort((x, y) => y.elo - x.elo);
@@ -22,6 +26,18 @@ export function snakeGroups<T extends PlayerRef>(players: T[], groupCount: numbe
     groups[idx].push(p);
   });
   return groups;
+}
+
+/**
+ * Onaydan önce elle düzenlenmiş grupları kontrol eder: herkes bir grupta olmalı
+ * ve her grupta maç çıkması için en az 2 oyuncu bulunmalı. Sorun yoksa null.
+ */
+export function groupProblem(groups: { name: string; size: number }[], unassigned: number): string | null {
+  if (unassigned > 0) return `${unassigned} oyuncu henüz bir gruba atanmamış`;
+  if (groups.length < 1) return "En az 1 grup olmalı";
+  const small = groups.find((g) => g.size < 2);
+  if (small) return `Grup ${small.name}'de en az 2 oyuncu olmalı (şu an ${small.size})`;
+  return null;
 }
 
 /**
