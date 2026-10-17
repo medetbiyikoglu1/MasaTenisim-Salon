@@ -19,13 +19,20 @@ export const PLAYER_NAV: NavItem[] = [
   { href: "/oyuncular", label: "Puan durumu" },
 ];
 
+export const GUEST_NAV: NavItem[] = [
+  { href: "/turnuvalar", label: "Turnuvalar" },
+  { href: "/oyuncular", label: "Puan durumu" },
+  { href: "/oyuncu", label: "Üye girişi" },
+];
+
 export function Nav({ items, showLogout }: { items: NavItem[]; showLogout: boolean }) {
   const path = usePathname();
   const NAV = items;
   return (
     <div className="flex flex-wrap gap-1">
       {NAV.map((n) => {
-        const active = n.href === "/" ? path === "/" : path.startsWith(n.href);
+        // "/oyuncu" sekmesi "/oyuncular" sayfasında da seçili görünmesin
+        const active = n.href === "/" ? path === "/" : path === n.href || path.startsWith(`${n.href}/`);
         return (
           <Link
             key={n.href}

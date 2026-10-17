@@ -16,11 +16,18 @@ export default async function PlayerHome({ searchParams }: { searchParams: Promi
   if (!me) {
     return (
       <div className="mx-auto max-w-md space-y-4 pt-6 text-center">
-        <h1>Oyuncu girişi</h1>
+        <h1>Üye girişi</h1>
         {hata === "gecersiz" && <ErrorNote message="Bu bağlantı geçersiz ya da yenilenmiş. Salon sahibinden yeni bağlantı iste." />}
         <p className="card text-sm text-zinc-600">
           Kendi sayfanı görmek için salon sahibinden <b>kişisel bağlantını</b> iste. Bağlantıyı bir kez açman yeterli; bu telefonda
-          girişin açık kalır.
+          girişin açık kalır. Turnuvalara kayıt olmak için üye girişi gerekir.
+        </p>
+        <p className="text-sm text-zinc-600">
+          Üye olmadan da <Link href="/turnuvalar" className="font-medium text-court-700 hover:underline">turnuvalara</Link> ve{" "}
+          <Link href="/oyuncular" className="font-medium text-court-700 hover:underline">puan durumuna</Link> göz atabilirsin.
+        </p>
+        <p className="text-xs text-zinc-500">
+          Salon sahibi misin? <Link href="/giris" className="hover:underline">Şifreyle giriş yap</Link>
         </p>
       </div>
     );

@@ -25,10 +25,23 @@ describe("erişim kuralları", () => {
     expect(accessFor("/oyuncu/giris/tok", "GET", "guest")).toBe("allow");
   });
 
-  it("girişsiz kullanıcı yönetim ve oyuncu sayfalarına giremez", () => {
-    expect(accessFor("/", "GET", "guest")).toBe("login");
-    expect(accessFor("/turnuvalar/yeni", "GET", "guest")).toBe("login");
+  it("misafir üye olmadan turnuvalara ve puan durumuna göz atar", () => {
+    expect(accessFor("/", "GET", "guest")).toBe("guest-home");
+    expect(accessFor("/turnuvalar", "GET", "guest")).toBe("allow");
+    expect(accessFor("/turnuvalar/t1", "GET", "guest")).toBe("allow");
+    expect(accessFor("/oyuncular", "GET", "guest")).toBe("allow");
+    expect(accessFor("/oyuncular/p1", "GET", "guest")).toBe("allow");
     expect(accessFor("/oyuncu", "GET", "guest")).toBe("allow"); // sayfa kendisi "bağlantı iste" der
+  });
+
+  it("misafir yönetim sayfalarına giremez, hiçbir şey gönderemez", () => {
+    expect(accessFor("/turnuvalar/yeni", "GET", "guest")).toBe("login");
+    expect(accessFor("/turnuvalar/t1/mac/m1", "GET", "guest")).toBe("login");
+    expect(accessFor("/masalar", "GET", "guest")).toBe("login");
+    expect(accessFor("/maclar", "GET", "guest")).toBe("login");
+    expect(accessFor("/turnuvalar/t1", "POST", "guest")).toBe("login");
+    expect(accessFor("/oyuncular", "POST", "guest")).toBe("login");
+    expect(accessFor("/oyuncu", "POST", "guest")).toBe("login");
   });
 
   it("oyuncu turnuva oluşturamaz, sonuç giremez, masaları göremez; sadece görüntüler", () => {

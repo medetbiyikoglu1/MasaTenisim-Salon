@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import Link from "next/link";
 import { getSession, requireAdmin } from "@/lib/auth/session";
 import { changeEntry } from "@/app/oyuncu/actions";
 import { revalidatePath } from "next/cache";
@@ -429,6 +430,14 @@ function PlayerDraftView({ t, playerId, hata, tamam }: DraftProps & { playerId: 
           </p>
           <button className={joined ? "btn btn-ghost" : "btn btn-accent"}>{joined ? "Katılımı geri çek" : "Katıl"}</button>
         </form>
+      )}
+      {!playerId && (
+        <div className="card flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm text-zinc-700">
+            Kayıtlar açık. Katılmak için <b>üye girişi</b> gerekli: salon sahibinden kişisel bağlantını iste, bağlantıyla girince buradan katılabilirsin.
+          </p>
+          <Link href="/oyuncu" className="btn btn-accent">Üye girişi</Link>
+        </div>
       )}
       <section className="card">
         <h2>Katılımcılar ({t.participants.length})</h2>

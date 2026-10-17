@@ -1,7 +1,7 @@
 /** Kim hangi sayfaya erişebilir? Middleware ve testler bu saf kuralı kullanır. */
 
 export type Role = "admin" | "player" | "guest";
-export type Access = "allow" | "login" | "player-home";
+export type Access = "allow" | "login" | "player-home" | "guest-home";
 
 export const ADMIN_COOKIE = "salon_admin";
 export const PLAYER_COOKIE = "salon_oyuncu";
@@ -9,7 +9,7 @@ export const PLAYER_COOKIE = "salon_oyuncu";
 /** Herkese açık: giriş sayfaları ve salon ekranı. */
 const PUBLIC = [/^\/giris$/, /^\/cikis$/, /^\/oyuncu\/giris\/[^/]+$/, /^\/tv\/[^/]+$/];
 
-/** Oyuncunun yalnızca görüntüleyebildiği sayfalar (GET). */
+/** Oyuncunun ve üye olmayan misafirin yalnızca görüntüleyebildiği sayfalar (GET). */
 const PLAYER_READ = [/^\/turnuvalar$/, /^\/turnuvalar\/(?!yeni$)[^/]+$/, /^\/oyuncular$/, /^\/oyuncular\/[^/]+$/];
 
 /**
@@ -30,7 +30,11 @@ export function accessFor(path: string, method: string, role: Role): Access {
     if (method === "POST" && PLAYER_POST.some((r) => r.test(path))) return "allow";
     return "player-home";
   }
+  // Misafir üye olmadan turnuvalara ve puan durumuna göz atar; turnuvaya katılmak üyelik ister
+  if (method === "GET" && PLAYER_READ.some((r) => r.test(path))) return "allow";
   // Girişsiz oyuncu kendi sayfasında "bağlantını salon sahibinden iste" açıklamasını görür
   if (path === "/oyuncu" && method === "GET") return "allow";
+  // Yönetim özeti yerine misafirin göz atabileceği turnuva listesi açılır
+  if (path === "/" && method === "GET") return "guest-home";
   return "login";
 }
