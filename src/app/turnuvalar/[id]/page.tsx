@@ -11,8 +11,10 @@ import { Avatar, EloDelta, Scoreboard, StatusBadge } from "@/components/ui";
 import { db } from "@/lib/db";
 import { LEVELS, addSalonPlayer } from "@/lib/services/player";
 import {
+  ADVANCE_PER_GROUP,
   MIN_PARTICIPANTS,
   TournamentError,
+  addGroupDuringGroups,
   addParticipants,
   removeParticipant,
   cancelProposedGroups,
@@ -21,7 +23,7 @@ import {
   saveGroupAssignments,
   startTournament,
 } from "@/lib/services/tournament";
-import { ROUND_LABELS, groupStandings, roundSize, type SetScore } from "@/lib/tournament";
+import { MIN_ADDED_GROUP, ROUND_LABELS, groupStandings, nextGroupName, roundSize, type SetScore } from "@/lib/tournament";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +103,27 @@ async function approveGroups(formData: FormData) {
   "use server";
   await requireAdmin();
   await applyGroups(formData, true);
+}
+
+/** Grup aşaması sürerken seçilen oyuncularla yeni bir grup açar. */
+async function addGroup(formData: FormData) {
+  "use server";
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  await run(id, () => addGroupDuringGroups(id, formData.getAll("players").map(String)));
+}
+
+/** Grup aşamasında salona yeni oyuncu kaydeder; turnuvaya yeni grupla eklenir. */
+async function registerPlayer(formData: FormData) {
+  "use server";
+  await requireAdmin();
+  const id = String(formData.get("id"));
+  const name = String(formData.get("name") ?? "").trim();
+  await run(id, async () => {
+    if (!name) throw new TournamentError("Oyuncu adı boş olamaz");
+    const t = await db.tournament.findUniqueOrThrow({ where: { id } });
+    await addSalonPlayer(t.salonId, { name, email: String(formData.get("email") ?? ""), level: String(formData.get("level")) });
+  });
 }
 
 async function finishGroups(formData: FormData) {
@@ -251,7 +274,7 @@ export default async function TournamentPage({
               <span className="tabular-nums text-zinc-500">{done} / {groupMatches.length}</span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-              <div className="h-full rounded-full bg-court-600 transition-all" style={{ width: `${(done / Math.max(1, groupMatches.length)) * 100}%` }} />
+              <div className="h-full rounded-full bg-ball-500 transition-all" style={{ width: `${(done / Math.max(1, groupMatches.length)) * 100}%` }} />
             </div>
             <p className="mt-1.5 text-xs text-zinc-500">
               {left > 0
@@ -264,6 +287,8 @@ export default async function TournamentPage({
           </button>
         </form>
       )}
+
+      {admin && t.status === "GROUPS" && <AddGroup t={t} />}
 
       <div className="grid gap-5 lg:grid-cols-2">
         {t.groups.map((g) => (
@@ -280,6 +305,66 @@ export default async function TournamentPage({
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * Grup aşaması sürerken yeni grup: turnuvada olmayan salon oyuncularından en az
+ * 3'ü seçilir; gruba sıradaki masa verilir ve maçları sıranın sonuna eklenir.
+ */
+async function AddGroup({ t }: { t: { id: string; salonId: string; groups: { name: string }[]; participants: { salonPlayerId: string }[] } }) {
+  const inTournament = new Set(t.participants.map((p) => p.salonPlayerId));
+  const others = (
+    await db.salonPlayer.findMany({ where: { salonId: t.salonId }, include: { player: true }, orderBy: { elo: "desc" } })
+  ).filter((p) => !inTournament.has(p.id));
+  const next = nextGroupName(t.groups.map((g) => g.name));
+  const advancing = (t.groups.length + 1) * ADVANCE_PER_GROUP;
+
+  return (
+    <details className="card group/add">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3">
+        <span>
+          <span className="font-display text-xl font-semibold tracking-tight text-zinc-900">Yeni grup ekle</span>
+          <span className="ml-2 text-sm text-zinc-500">Grup {next}</span>
+        </span>
+        <span className="text-sm text-zinc-500 group-open/add:hidden">Aç ▾</span>
+        <span className="hidden text-sm text-zinc-500 group-open/add:inline">Kapat ▴</span>
+      </summary>
+      <p className="mt-3 text-sm text-zinc-600">
+        Turnuvada olmayan oyunculardan en az {MIN_ADDED_GROUP} tanesini seç. Grup {next} sıradaki turnuva masasını alır, herkes herkesle
+        maçları mevcut maçların sonuna eklenir; diğer grupların maçları değişmez. Her gruptan {ADVANCE_PER_GROUP} kişi elemeye çıktığı için
+        eleme tablosu {advancing} kişiye büyür.
+      </p>
+
+      {others.length > 0 ? (
+        <form action={addGroup} className="mt-4">
+          <input type="hidden" name="id" value={t.id} />
+          <div className="mb-3 grid gap-2 sm:grid-cols-3">
+            {others.map((p) => (
+              <label key={p.id} className="flex cursor-pointer items-center gap-2.5 rounded-lg border border-zinc-200 px-3 py-2 text-sm has-checked:border-court-600 has-checked:bg-court-50">
+                <input type="checkbox" name="players" value={p.id} className="accent-court-700" />
+                <Avatar name={p.player.name} size="sm" />
+                <span className="flex-1 truncate">{p.player.name}</span>
+                <TierBadge elo={p.elo} compact />
+                <span className="tabular-nums text-zinc-400">{p.elo}</span>
+              </label>
+            ))}
+          </div>
+          <button className="btn btn-accent">Grup {next}&apos;yi oluştur</button>
+        </form>
+      ) : (
+        <p className="mt-4 text-sm text-zinc-600">Salonda turnuvaya katılmamış oyuncu yok. Aşağıdan yeni oyuncu kaydedebilirsin.</p>
+      )}
+
+      <form action={registerPlayer} className="mt-5 flex flex-wrap items-end gap-3 border-t border-zinc-100 pt-4">
+        <input type="hidden" name="id" value={t.id} />
+        <h3 className="w-full text-sm font-semibold text-zinc-700">Yeni oyuncu kaydet (listeye eklenir)</h3>
+        <div><label className="label">Ad soyad</label><input name="name" required className="input" /></div>
+        <div><label className="label">E-posta (isteğe bağlı)</label><input name="email" type="email" className="input" /></div>
+        <LevelPicker levels={LEVELS} />
+        <button className="btn">Kaydet</button>
+      </form>
+    </details>
   );
 }
 
@@ -312,7 +397,7 @@ type HeroProps = {
   facts: string[];
 };
 
-/** Turnuva başlığı: masa yeşili zemin, ortasında masa çizgisi. */
+/** Turnuva başlığı: siyah zemin, ortasında masa çizgisi, köşede kırmızı top. */
 function Hero({ t, facts }: HeroProps) {
   return (
     <div className="relative overflow-hidden rounded-2xl bg-court-800 px-6 py-6 text-white shadow-md">

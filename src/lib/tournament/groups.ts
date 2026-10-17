@@ -80,3 +80,36 @@ export function planGroupStage(groups: { id: string }[][]): PlannedMatch[] {
   }
   return out;
 }
+
+export const GROUP_NAMES = "ABCDEFGHIJKLMNOP";
+/** Grup aşamasında sonradan eklenen grupta olması gereken en az oyuncu. */
+export const MIN_ADDED_GROUP = 3;
+
+/** Sıradaki boş grup harfi; harfler bitince G17, G18 ... */
+export function nextGroupName(existing: string[]): string {
+  const used = new Set(existing);
+  for (const ch of GROUP_NAMES) if (!used.has(ch)) return ch;
+  for (let i = GROUP_NAMES.length + 1; ; i++) if (!used.has(`G${i}`)) return `G${i}`;
+}
+
+/**
+ * Grup aşaması sürerken eklenen tek bir grubun planı: oyuncular ELO'ya göre
+ * mevcut en büyük seri numarasının arkasından numaralanır, herkes herkesle
+ * maçları mevcut maç sırasının sonuna eklenir. Mevcut gruplara dokunulmaz.
+ */
+export function planAddedGroup<T extends PlayerRef>(
+  players: T[],
+  existing: { groupNames: string[]; maxSeed: number; maxOrder: number },
+) {
+  if (players.length < MIN_ADDED_GROUP) {
+    throw new Error(`Yeni grupta en az ${MIN_ADDED_GROUP} oyuncu olmalı (şu an ${players.length})`);
+  }
+  if (new Set(players.map((p) => p.id)).size !== players.length) throw new Error("Aynı oyuncu iki kez seçilmiş");
+  const sorted = [...players].sort((x, y) => y.elo - x.elo);
+  const seeds = sorted.map((p, i) => ({ id: p.id, seed: existing.maxSeed + i + 1 }));
+  let order = existing.maxOrder;
+  const matches = roundRobin(sorted.map((p) => p.id)).flatMap((pairs) =>
+    pairs.map(([a, b]) => ({ round: "GROUP" as const, order: ++order, playerAId: a, playerBId: b })),
+  );
+  return { name: nextGroupName(existing.groupNames), seeds, matches };
+}

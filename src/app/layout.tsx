@@ -19,7 +19,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="tr" className={`${body.variable} ${heading.variable}`}>
       <body className="min-h-screen bg-zinc-100/70 text-zinc-900 antialiased">
-        <header className="bg-court-900 shadow-md">
+        <header className="bg-court-950 shadow-md">
           {/* Masanın orta çizgisi */}
           <nav className="relative mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-3">
             <Link href={admin ? "/" : playerId ? "/oyuncu" : "/turnuvalar"} className="flex items-center gap-2.5">
@@ -28,7 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             </Link>
             <Nav items={items} showLogout={admin || !!playerId} />
           </nav>
-          <div className="h-1 bg-gradient-to-r from-white/0 via-white/70 to-white/0" />
+          <div className="h-1 bg-gradient-to-r from-ball-600 via-ball-500 to-ball-600" />
         </header>
         <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
       </body>
