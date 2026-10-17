@@ -133,6 +133,7 @@ async function main() {
     entryFee: 300, prizes: ["Kupa + 1000 ₺", "Madalya", "Madalya"], tableIds: tables.slice(0, 4).map((t) => t.id), consolation: true,
   });
   await T.addParticipants(finished.id, ids.slice(0, 16));
+  await T.proposeGroups(finished.id);
   await T.startTournament(finished.id);
   await playTournamentMatches(finished.id, (r) => r === "GROUP", { walkoverOnce: true });
   await T.finishGroupStage(finished.id);
@@ -146,6 +147,7 @@ async function main() {
     entryFee: null, prizes: ["Kupa"], tableIds: tables.slice(4, 6).map((t) => t.id),
   });
   await T.addParticipants(live.id, ids.slice(2, 12));
+  await T.proposeGroups(live.id);
   await T.startTournament(live.id);
   const total = await db.match.count({ where: { tournamentId: live.id } });
   await playTournamentMatches(live.id, (r) => r === "GROUP", { limit: Math.floor(total / 2) });
