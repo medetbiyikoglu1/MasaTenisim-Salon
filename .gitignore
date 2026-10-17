@@ -48,3 +48,6 @@ next-env.d.ts
 /prova.log
 /tunel.log
 /prova-linkler.txt
+
+# makineye özel Docker ayarları
+/docker-compose.override.yml
