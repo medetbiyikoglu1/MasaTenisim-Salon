@@ -14,6 +14,8 @@ import {
   seedOrder,
   snakeGroups,
   groupProblem,
+  nextGroupName,
+  planAddedGroup,
   type QueueMatch,
   validateMatchSets,
 } from "./index";
@@ -82,6 +84,45 @@ describe("gruplar", () => {
     const plan = planGroupStage(snakeGroups(players(20), 5));
     expect(plan).toHaveLength(30);
     expect(plan.slice(0, 10).map((m) => m.groupIndex)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 4, 4]);
+  });
+});
+
+describe("grup aşamasında yeni grup", () => {
+  it("sıradaki boş harfi verir, harfler bitince numaraya geçer", () => {
+    expect(nextGroupName(["A", "B", "C", "D"])).toBe("E");
+    expect(nextGroupName(["A", "C"])).toBe("B");
+    expect(nextGroupName("ABCDEFGHIJKLMNOP".split(""))).toBe("G17");
+  });
+
+  it("seri numaraları mevcutların arkasından ELO sırasıyla, maçlar mevcut sıranın sonuna eklenir", () => {
+    const yeni = [{ id: "x", elo: 1200 }, { id: "y", elo: 1500 }, { id: "z", elo: 1300 }, { id: "w", elo: 1100 }];
+    const plan = planAddedGroup(yeni, { groupNames: ["A", "B", "C", "D"], maxSeed: 16, maxOrder: 23 });
+    expect(plan.name).toBe("E");
+    expect(plan.seeds).toEqual([{ id: "y", seed: 17 }, { id: "z", seed: 18 }, { id: "x", seed: 19 }, { id: "w", seed: 20 }]);
+    expect(plan.matches).toHaveLength(6);
+    expect(plan.matches.map((m) => m.order)).toEqual([24, 25, 26, 27, 28, 29]);
+    expect(plan.matches.every((m) => m.round === "GROUP")).toBe(true);
+    const pairs = plan.matches.map((m) => [m.playerAId, m.playerBId].sort().join(""));
+    expect(new Set(pairs).size).toBe(6);
+  });
+
+  it("hiç maç yoksa sıra 0'dan başlar", () => {
+    const plan = planAddedGroup(players(3), { groupNames: [], maxSeed: 0, maxOrder: -1 });
+    expect(plan.matches.map((m) => m.order)).toEqual([0, 1, 2]);
+  });
+
+  it("3'ten az oyuncu ya da tekrar eden oyuncu kabul edilmez", () => {
+    const opts = { groupNames: ["A"], maxSeed: 4, maxOrder: 5 };
+    expect(() => planAddedGroup(players(2), opts)).toThrow("en az 3");
+    expect(() => planAddedGroup([...players(3), players(1)[0]], opts)).toThrow("iki kez");
+  });
+
+  it("eklenen grubun ilk ikisi de eleme tablosuna girer (5 grup → 10 kişi, 16'lık tablo)", () => {
+    const groups = [["a1", "a2", "a3"], ["b1", "b2", "b3"], ["c1", "c2", "c3"], ["d1", "d2", "d3"], ["e1", "e2", "e3"]];
+    const seeded = knockoutSeeding(splitByStanding(groups, 2, false).main, 2);
+    expect(seeded).toHaveLength(10);
+    expect(seeded).toEqual(expect.arrayContaining(["e1", "e2"]));
+    expect(firstKnockoutRound(seeded)).toHaveLength(8);
   });
 });
 

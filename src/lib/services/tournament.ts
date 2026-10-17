@@ -7,10 +7,12 @@ import {
   firstKnockoutRound,
   splitByStanding,
   type Bracket,
+  GROUP_NAMES,
   groupProblem,
   groupStandings,
   knockoutSeeding,
   nextKnockoutSlot,
+  planAddedGroup,
   planGroupStage,
   roundNameForSize,
   roundSize,
@@ -34,7 +36,6 @@ export type CreateTournamentInput = {
   consolation?: boolean;
 };
 
-const GROUP_NAMES = "ABCDEFGHIJKLMNOP";
 export const MIN_PARTICIPANTS = 3;
 /** Her gruptan eleme tablosuna çıkan oyuncu sayısı. */
 export const ADVANCE_PER_GROUP = 2;
@@ -205,6 +206,60 @@ export async function startTournament(tournamentId: string) {
 }
 
 /**
+ * Grup aşaması sürerken turnuvaya yeni bir grup ekler. Seçilen oyuncular
+ * (turnuvada olmayan salon oyuncuları) sıradaki harfle yeni gruba girer; gruba
+ * turnuva masalarından sıradaki verilir ve herkes herkesle maçları mevcut maç
+ * sırasının sonuna eklenir. Eleme tablosu grup aşaması bitince tüm gruplardan
+ * kurulduğu için yeni grubun ilk ikisi de elemeye çıkar.
+ */
+export async function addGroupDuringGroups(tournamentId: string, salonPlayerIds: string[]) {
+  const ids = [...new Set(salonPlayerIds)];
+  return db.$transaction(async (tx) => {
+    // Turnuva satırını kilitle: aynı anda grup aşaması bitirilemesin ya da iki grup aynı harfi almasın
+    await tx.$queryRaw`SELECT id FROM "Tournament" WHERE id = ${tournamentId} FOR UPDATE`;
+    const t = await tx.tournament.findUnique({
+      where: { id: tournamentId },
+      include: {
+        groups: { select: { name: true } },
+        participants: { select: { salonPlayerId: true, seed: true } },
+        blocks: { include: { table: true }, orderBy: { table: { number: "asc" } } },
+      },
+    });
+    if (!t) throw new TournamentError("Turnuva bulunamadı");
+    if (t.status !== "GROUPS") throw new TournamentError("Yeni grup yalnızca grup aşaması sürerken eklenebilir");
+
+    const already = new Set(t.participants.map((p) => p.salonPlayerId));
+    if (ids.some((id) => already.has(id))) throw new TournamentError("Seçilen oyunculardan biri zaten turnuvada");
+    const players = await tx.salonPlayer.findMany({ where: { id: { in: ids }, salonId: t.salonId } });
+    if (players.length !== ids.length) throw new TournamentError("Seçilen oyunculardan biri bu salonda bulunamadı");
+
+    const tableIds = [...new Set(t.blocks.map((b) => b.tableId))];
+    if (tableIds.length < 1) throw new TournamentError("Turnuvaya masa atanmamış");
+    const lastOrder = await tx.match.aggregate({ where: { tournamentId, round: "GROUP" }, _max: { order: true } });
+
+    let plan;
+    try {
+      plan = planAddedGroup(players, {
+        groupNames: t.groups.map((g) => g.name),
+        maxSeed: Math.max(0, ...t.participants.map((p) => p.seed ?? 0)),
+        maxOrder: lastOrder._max.order ?? -1,
+      });
+    } catch (e) {
+      throw new TournamentError((e as Error).message);
+    }
+
+    const group = await tx.group.create({
+      data: { tournamentId, name: plan.name, tableId: tableIds[t.groups.length % tableIds.length] },
+    });
+    await tx.participant.createMany({
+      data: plan.seeds.map((s) => ({ tournamentId, salonPlayerId: s.id, groupId: group.id, seed: s.seed })),
+    });
+    await tx.match.createMany({ data: plan.matches.map((m) => ({ tournamentId, groupId: group.id, ...m })) });
+    return group;
+  });
+}
+
+/**
  * Maç sonucunu kaydeder ve iki oyuncunun ELO'sunu günceller. Daha önce girilmiş
  * bir sonuç düzeltiliyorsa önce o maçın ELO etkisi geri alınır, sonra yeniden hesaplanır.
  */
@@ -354,6 +409,11 @@ export async function finishGroupStage(tournamentId: string) {
   await db.$transaction(async (tx) => {
     const { count } = await tx.tournament.updateMany({ where: { id: tournamentId, status: "GROUPS" }, data: { status: "KNOCKOUT" } });
     if (count === 0) throw new TournamentError("Grup aşaması zaten bitirilmiş");
+    // Bu arada yeni bir grup eklendiyse onun maçları henüz oynanmamıştır
+    const open = await tx.match.count({ where: { tournamentId, round: "GROUP", status: { not: "DONE" } } });
+    if (open > 0) throw new TournamentError(`Grup aşaması bitmedi: ${open} maç kaldı`);
+    const groupCount = await tx.group.count({ where: { tournamentId } });
+    if (groupCount !== t.groups.length) throw new TournamentError("Bu arada yeni grup eklendi; sayfayı yenileyip tekrar deneyin");
     await createBracket(tx, tournamentId, "MAIN", mainSeeded);
     // Teselli için en az 2 oyuncu gerekir (ör. tek 3 kişilik grupta yalnızca 1 kişi kalır)
     if (consolationSeeded.length >= 2) await createBracket(tx, tournamentId, "CONSOLATION", consolationSeeded);
